@@ -89,6 +89,7 @@ export function App() {
   }
 
   const needsReauth = state.accounts.filter((account) => account.needsReauth);
+  const syncErrors = state.accounts.filter((account) => account.syncError);
 
   return (
     <Shell>
@@ -130,6 +131,15 @@ export function App() {
           Reconnect {needsReauth.map((account) => account.email).join(', ')}
         </button>
       )}
+      {syncErrors.map((account) => (
+        <button
+          key={account.email}
+          className="block w-full bg-clay/10 px-3 py-2 text-left text-xs text-clay"
+          onClick={() => void browser.runtime.openOptionsPage()}
+        >
+          Sync failed for {account.email}: {account.syncError}
+        </button>
+      ))}
       {error && <p className="px-3 py-2 text-xs text-clay">{error}</p>}
 
       {codes.length === 0 ? (
@@ -139,8 +149,8 @@ export function App() {
           {codes.map((entry) => (
             <li key={entry.id} className="flex items-start gap-2 border-b border-line px-3 py-2.5 last:border-b-0">
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-lg tracking-wider text-ink">
-                  {entry.kind === 'link' ? linkHost(entry.url ?? '') || entry.code : entry.code}
+                <div className="truncate font-mono text-lg tracking-wider text-ink" title={displayValue(entry)}>
+                  {displayValue(entry)}
                 </div>
                 <div className="truncate text-xs text-ink/70">{senderName(entry.from)} · {entry.subject || 'No subject'}</div>
                 <div className="mt-0.5 text-[11px] text-ink/50">
@@ -176,7 +186,7 @@ export function App() {
                   className="rounded-md border border-line bg-white px-2 py-1 text-xs font-semibold"
                   onClick={() => void browser.tabs.create({ url: gmailMessageUrl(entry.account, entry.messageId) })}
                 >
-                  Open
+                  Open email
                 </button>
               </div>
             </li>
@@ -211,6 +221,10 @@ export function App() {
 
 function Shell({ children }: { children: ReactNode }) {
   return <div className="w-[360px] bg-paper font-sans text-ink">{children}</div>;
+}
+
+function displayValue(entry: CodeEntry): string {
+  return entry.kind === 'link' ? linkHost(entry.url ?? '') || entry.code : entry.code;
 }
 
 function senderName(from: string): string {

@@ -39,6 +39,7 @@ export function toPublicAccount(account: Account) {
     email: account.email,
     mode: account.mode,
     needsReauth: account.needsReauth,
+    syncError: account.syncError,
   };
 }
 

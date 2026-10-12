@@ -7,6 +7,8 @@ export interface Account {
   historyId?: string;
   mode?: Mode;
   needsReauth?: boolean;
+  /** Last poll failure for this account. Cleared on the next successful poll. */
+  syncError?: string;
 }
 
 export type EntryKind = 'code' | 'link';
@@ -49,6 +51,7 @@ export interface PublicAccount {
   email: string;
   mode?: Mode;
   needsReauth?: boolean;
+  syncError?: string;
 }
 
 export interface PublicState {
