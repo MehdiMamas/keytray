@@ -5,7 +5,7 @@ export type ExtensionRequest =
   | { type: 'REFRESH_BILLING' }
   | { type: 'POLL' }
   | { type: 'SYNC'; accountEmail?: string }
-  | { type: 'SAVE_ACCOUNT'; account: { email: string; token: string; expiresAt: number } }
+  | { type: 'SAVE_ACCOUNT'; account: { email: string; token: string; expiresAt: number; refreshToken?: string } }
   | { type: 'REMOVE_ACCOUNT'; email: string }
   | { type: 'SET_ACCOUNT_MODE'; email: string; mode: Mode | null }
   | { type: 'SET_SETTINGS'; settings: Partial<Settings> }

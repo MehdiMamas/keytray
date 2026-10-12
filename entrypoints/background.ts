@@ -18,6 +18,10 @@ import {
 } from '~/lib/types';
 
 const TOKEN_SKEW_MS = 5 * 60 * 1000;
+const POLL_PERIOD_MINUTES = 1;
+/** Popups and code pages each ping every 3 s. One poll per gap serves all of them. */
+const PAGE_POLL_GAP_MS = 2500;
+let lastPagePollAt = 0;
 let queue: Promise<unknown> = Promise.resolve();
 
 export default defineBackground(() => {
@@ -49,7 +53,9 @@ export default defineBackground(() => {
 
 async function ensureAlarm(): Promise<void> {
   const existing = await browser.alarms.get('poll');
-  if (!existing) await browser.alarms.create('poll', { periodInMinutes: 0.5 });
+  if (existing?.periodInMinutes !== POLL_PERIOD_MINUTES) {
+    await browser.alarms.create('poll', { periodInMinutes: POLL_PERIOD_MINUTES });
+  }
 }
 
 function enqueue<T>(job: () => Promise<T>): Promise<T> {
@@ -80,6 +86,10 @@ async function handleMessage(message: ExtensionRequest): Promise<ExtensionRespon
     case 'OTP_PAGE_DETECTED': {
       const state = await loadState();
       if (!state.settings.fastPoll) return { ok: true, state: await publish(state) };
+      if (message.type === 'POLL' && Date.now() - lastPagePollAt < PAGE_POLL_GAP_MS) {
+        return { ok: true, state: await publish(state) };
+      }
+      lastPagePollAt = Date.now();
       const next = await enqueue(() => pollAccounts());
       return { ok: true, state: await publish(next) };
     }
@@ -100,6 +110,7 @@ async function handleMessage(message: ExtensionRequest): Promise<ExtensionRespon
           email: message.account.email,
           token: message.account.token,
           expiresAt: message.account.expiresAt,
+          refreshToken: message.account.refreshToken ?? existing?.refreshToken,
           historyId: existing?.historyId,
           mode: existing?.mode,
           needsReauth: false,
@@ -232,10 +243,9 @@ async function pollOne(state: PersistedState, account: Account): Promise<CodeEnt
     result = await pollGmail(token, account.historyId);
   } catch (error) {
     if (error instanceof AuthError) {
-      const refreshed = await refreshAccessToken(account.email);
+      const refreshed = await refreshAccessToken(account);
       if (!refreshed) {
-        account.needsReauth = true;
-        account.token = undefined;
+        markNeedsReauth(account);
         return [];
       }
       account.token = refreshed.token;
@@ -278,10 +288,9 @@ async function pollOne(state: PersistedState, account: Account): Promise<CodeEnt
 
 async function ensureToken(state: PersistedState, account: Account): Promise<string | null> {
   if (account.token && account.expiresAt && account.expiresAt - Date.now() > TOKEN_SKEW_MS) return account.token;
-  const refreshed = await refreshAccessToken(account.email);
+  const refreshed = await refreshAccessToken(account);
   if (!refreshed) {
-    account.needsReauth = true;
-    account.token = undefined;
+    markNeedsReauth(account);
     await saveState(state);
     return null;
   }
@@ -289,6 +298,13 @@ async function ensureToken(state: PersistedState, account: Account): Promise<str
   account.expiresAt = refreshed.expiresAt;
   account.needsReauth = false;
   return refreshed.token;
+}
+
+function markNeedsReauth(account: Account): void {
+  account.needsReauth = true;
+  account.token = undefined;
+  // Google rejected it for good. Reconnect issues a new one.
+  delete account.refreshToken;
 }
 
 async function actOnNewest(state: PersistedState, fresh: CodeEntry[]): Promise<void> {

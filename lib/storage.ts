@@ -40,6 +40,7 @@ export function toPublicAccount(account: Account) {
     mode: account.mode,
     needsReauth: account.needsReauth,
     syncError: account.syncError,
+    staysSignedIn: Boolean(account.refreshToken),
   };
 }
 

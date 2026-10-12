@@ -125,6 +125,9 @@ export function App() {
                   <div className="truncate text-sm font-medium">{account.email}</div>
                   {account.needsReauth && <div className="text-xs text-clay">Sign-in expired</div>}
                   {account.syncError && <div className="text-xs text-clay">{account.syncError}</div>}
+                  {!account.needsReauth && !account.staysSignedIn && (
+                    <div className="text-xs text-ink/60">Reconnect once so this account stays signed in.</div>
+                  )}
                 </div>
                 <select
                   aria-label={`Mode for ${account.email}`}
