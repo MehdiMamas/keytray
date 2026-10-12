@@ -21,7 +21,7 @@
     </header>
     <main class="wrap">
       <h1>Privacy policy</h1>
-      <p class="updated">Last updated September 28, 2026.</p>
+      <p class="updated">Last updated October 12, 2026.</p>
       <p>
         Keytray is a browser extension that runs on your device. This policy describes the
         Google user data it accesses and what happens to that data. The developer does not operate a
@@ -50,7 +50,7 @@
       <p>Using those scopes, the extension requests from Google APIs:</p>
       <ul>
         <li>Your Gmail address.</li>
-        <li>A short-lived OAuth access token.</li>
+        <li>A short-lived OAuth access token and a refresh token used to renew it.</li>
         <li>Your Gmail profile history id, used only to ask for messages added since the last check.</li>
         <li>
           Recent inbox messages (headers and body) so it can search the subject and body for a
@@ -86,7 +86,7 @@
         the equivalent in Edge or Brave). It stays on that browser profile.
       </p>
       <ul>
-        <li>Connected account email addresses, access tokens, token expiry, and a Gmail history id.</li>
+        <li>Connected account email addresses, access and refresh tokens, token expiry, and a Gmail history id.</li>
         <li>Up to 50 extracted codes, each with the sender, subject, and time. Email bodies are not stored.</li>
         <li>Ids of messages already processed, so the same code is not handled twice.</li>
         <li>Your settings (fill, copy, or do nothing; notifications; polling; auto-submit; fill chip).</li>
@@ -117,8 +117,8 @@
 
       <h2>How long data is kept</h2>
       <p>
-        Tokens last about an hour and are refreshed while that Google account stays signed in in the
-        browser. Codes are capped at 50 entries. You can clear stored codes in the extension settings,
+        Access tokens last about an hour. The extension renews them with a refresh token that
+        stays in local extension storage until you remove the account, uninstall, or revoke access. Codes are capped at 50 entries. You can clear stored codes in the extension settings,
         remove an account, or uninstall the extension, which removes its local storage. You can also
         revoke the extension's access at
         <a href="https://myaccount.google.com/permissions">Google Account permissions</a>.

@@ -62,9 +62,9 @@ describe('pollGmail', () => {
   it('skips a message Gmail no longer has and still advances history', async () => {
     vi.stubGlobal('fetch', async (input: string) => {
       const url = String(input);
-      if (url.endsWith('/profile')) return json({ historyId: '200' });
       if (url.includes('/history?')) {
         return json({
+          historyId: '200',
           history: [
             { messagesAdded: [{ message: { id: 'gone' } }, { message: { id: 'kept' } }] },
           ],
@@ -79,6 +79,20 @@ describe('pollGmail', () => {
     expect(result.historyId).toBe('200');
     expect(result.messages.map((message) => message.id)).toEqual(['kept']);
     expect(result.messages[0]?.body).toContain('123456');
+  });
+
+  it('does not call profile when it already has a history id', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (input: string) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.includes('/history?')) return json({ historyId: '300' });
+      throw new Error(`unexpected ${url}`);
+    });
+
+    const result = await pollGmail('token', '250');
+    expect(result).toEqual({ messages: [], historyId: '300' });
+    expect(calls).toHaveLength(1);
   });
 
   it('throws GmailApiError when Gmail returns 500', async () => {

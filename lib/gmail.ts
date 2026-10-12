@@ -65,27 +65,28 @@ export async function pollGmail(
   token: string,
   historyId: string | undefined,
 ): Promise<{ messages: ParsedMessage[]; historyId: string }> {
-  const profile = await gmailGet<{ historyId: string }>(token, 'profile');
-  const freshHistoryId = String(profile.historyId);
+  if (!historyId) return fullSync(token);
 
-  if (!historyId) {
-    const messages = await listRecent(token);
-    return { messages, historyId: freshHistoryId };
-  }
-
+  let history: { ids: string[]; historyId: string };
   try {
-    const ids = await listHistory(token, historyId);
-    const messages: ParsedMessage[] = [];
-    for (const id of ids.slice(0, 20)) {
-      const message = await getMessage(token, id);
-      if (message) messages.push(message);
-    }
-    return { messages, historyId: freshHistoryId };
+    history = await listHistory(token, historyId);
   } catch (error) {
     if (!(error instanceof HistoryExpiredError)) throw error;
-    const messages = await listRecent(token);
-    return { messages, historyId: freshHistoryId };
+    return fullSync(token);
   }
+  const messages: ParsedMessage[] = [];
+  for (const id of history.ids.slice(0, 20)) {
+    const message = await getMessage(token, id);
+    if (message) messages.push(message);
+  }
+  return { messages, historyId: history.historyId };
+}
+
+/** First sync, or history id too old: read today's mail and start history from now. */
+async function fullSync(token: string): Promise<{ messages: ParsedMessage[]; historyId: string }> {
+  const profile = await gmailGet<{ historyId: string }>(token, 'profile');
+  const messages = await listRecent(token);
+  return { messages, historyId: String(profile.historyId) };
 }
 
 async function listRecent(token: string): Promise<ParsedMessage[]> {
@@ -101,8 +102,10 @@ async function listRecent(token: string): Promise<ParsedMessage[]> {
   return messages;
 }
 
-async function listHistory(token: string, startHistoryId: string): Promise<string[]> {
+/** The response carries the mailbox's current history id, so no profile call is needed. */
+async function listHistory(token: string, startHistoryId: string): Promise<{ ids: string[]; historyId: string }> {
   const ids: string[] = [];
+  let latest = startHistoryId;
   let pageToken = '';
   do {
     const query = new URLSearchParams({
@@ -113,6 +116,7 @@ async function listHistory(token: string, startHistoryId: string): Promise<strin
     if (pageToken) query.set('pageToken', pageToken);
     const page = await gmailGet<{
       history?: { messagesAdded?: { message?: { id?: string } }[] }[];
+      historyId?: string;
       nextPageToken?: string;
     }>(token, `history?${query.toString()}`);
     for (const entry of page.history ?? []) {
@@ -120,9 +124,10 @@ async function listHistory(token: string, startHistoryId: string): Promise<strin
         if (added.message?.id) ids.push(added.message.id);
       }
     }
+    if (page.historyId) latest = String(page.historyId);
     pageToken = page.nextPageToken ?? '';
   } while (pageToken);
-  return ids;
+  return { ids, historyId: latest };
 }
 
 async function getMessage(token: string, id: string): Promise<ParsedMessage | null> {

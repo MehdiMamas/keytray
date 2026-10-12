@@ -4,6 +4,8 @@ export interface Account {
   email: string;
   token?: string;
   expiresAt?: number;
+  /** Google OAuth refresh token. Missing for accounts connected before 0.5.0. */
+  refreshToken?: string;
   historyId?: string;
   mode?: Mode;
   needsReauth?: boolean;
@@ -52,6 +54,8 @@ export interface PublicAccount {
   mode?: Mode;
   needsReauth?: boolean;
   syncError?: string;
+  /** False for accounts connected before refresh tokens. One Reconnect fixes it. */
+  staysSignedIn: boolean;
 }
 
 export interface PublicState {
