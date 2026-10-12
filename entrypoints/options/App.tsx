@@ -124,6 +124,7 @@ export function App() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{account.email}</div>
                   {account.needsReauth && <div className="text-xs text-clay">Sign-in expired</div>}
+                  {account.syncError && <div className="text-xs text-clay">{account.syncError}</div>}
                 </div>
                 <select
                   aria-label={`Mode for ${account.email}`}

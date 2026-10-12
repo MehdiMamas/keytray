@@ -12,6 +12,16 @@ export class HistoryExpiredError extends Error {
   }
 }
 
+export class GmailApiError extends Error {
+  status: number;
+
+  constructor(status: number) {
+    super(`Gmail API ${status}`);
+    this.name = 'GmailApiError';
+    this.status = status;
+  }
+}
+
 export interface ParsedMessage {
   id: string;
   from: string;
@@ -67,7 +77,8 @@ export async function pollGmail(
     const ids = await listHistory(token, historyId);
     const messages: ParsedMessage[] = [];
     for (const id of ids.slice(0, 20)) {
-      messages.push(await getMessage(token, id));
+      const message = await getMessage(token, id);
+      if (message) messages.push(message);
     }
     return { messages, historyId: freshHistoryId };
   } catch (error) {
@@ -84,7 +95,8 @@ async function listRecent(token: string): Promise<ParsedMessage[]> {
   );
   const messages: ParsedMessage[] = [];
   for (const item of listed.messages ?? []) {
-    messages.push(await getMessage(token, item.id));
+    const message = await getMessage(token, item.id);
+    if (message) messages.push(message);
   }
   return messages;
 }
@@ -113,9 +125,14 @@ async function listHistory(token: string, startHistoryId: string): Promise<strin
   return ids;
 }
 
-async function getMessage(token: string, id: string): Promise<ParsedMessage> {
-  const raw = await gmailGet<GmailMessage>(token, `messages/${id}?format=full`);
-  return parseGmailMessage(raw);
+async function getMessage(token: string, id: string): Promise<ParsedMessage | null> {
+  try {
+    const raw = await gmailGet<GmailMessage>(token, `messages/${id}?format=full`);
+    return parseGmailMessage(raw);
+  } catch (error) {
+    if (error instanceof GmailApiError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export function parseGmailMessage(raw: GmailMessage): ParsedMessage {
@@ -169,6 +186,6 @@ async function gmailGet<T>(token: string, path: string): Promise<T> {
   });
   if (response.status === 401) throw new AuthError();
   if (response.status === 404 && path.startsWith('history')) throw new HistoryExpiredError();
-  if (!response.ok) throw new Error(`Gmail API ${response.status}`);
+  if (!response.ok) throw new GmailApiError(response.status);
   return (await response.json()) as T;
 }

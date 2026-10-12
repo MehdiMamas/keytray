@@ -203,11 +203,13 @@ async function pollAccounts(onlyEmail?: string): Promise<PersistedState> {
     } catch (error) {
       failures += 1;
       lastError = error;
+      account.syncError = error instanceof Error ? error.message : 'Sync failed';
       console.error('[Gmail OTP] poll failed', account.email, error);
     }
   }
 
   if (targets.length > 0 && failures === targets.length) {
+    await saveState(state);
     throw lastError instanceof Error ? lastError : new Error('Sync failed');
   }
 
@@ -250,6 +252,7 @@ async function pollOne(state: PersistedState, account: Account): Promise<CodeEnt
 
   account.historyId = result.historyId;
   account.needsReauth = false;
+  delete account.syncError;
   const found: CodeEntry[] = [];
   for (const message of result.messages) {
     const key = `${account.email}:${message.id}`;

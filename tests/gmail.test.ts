@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { decodeBody, gmailMessageUrl, htmlToText, parseGmailMessage } from '~/lib/gmail';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { decodeBody, GmailApiError, gmailMessageUrl, htmlToText, parseGmailMessage, pollGmail } from '~/lib/gmail';
 
 describe('gmail parsing', () => {
   it('decodes a base64url plain-text part', () => {
@@ -54,6 +54,61 @@ describe('gmail parsing', () => {
   });
 });
 
+describe('pollGmail', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('skips a message Gmail no longer has and still advances history', async () => {
+    vi.stubGlobal('fetch', async (input: string) => {
+      const url = String(input);
+      if (url.endsWith('/profile')) return json({ historyId: '200' });
+      if (url.includes('/history?')) {
+        return json({
+          history: [
+            { messagesAdded: [{ message: { id: 'gone' } }, { message: { id: 'kept' } }] },
+          ],
+        });
+      }
+      if (url.includes('/messages/gone')) return new Response('', { status: 404 });
+      if (url.includes('/messages/kept')) return json(gmailMessage('kept', 'Your code is 123456'));
+      throw new Error(`unexpected ${url}`);
+    });
+
+    const result = await pollGmail('token', '100');
+    expect(result.historyId).toBe('200');
+    expect(result.messages.map((message) => message.id)).toEqual(['kept']);
+    expect(result.messages[0]?.body).toContain('123456');
+  });
+
+  it('throws GmailApiError when Gmail returns 500', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 500 }));
+    await expect(pollGmail('token', undefined)).rejects.toBeInstanceOf(GmailApiError);
+  });
+});
+
 function encode(value: string): string {
   return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function gmailMessage(id: string, text: string) {
+  return {
+    id,
+    internalDate: '1700000000000',
+    payload: {
+      headers: [
+        { name: 'Subject', value: 'Verification code' },
+        { name: 'From', value: 'Google <noreply@google.com>' },
+      ],
+      mimeType: 'text/plain',
+      body: { data: encode(text) },
+    },
+  };
 }
