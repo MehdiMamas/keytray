@@ -30,6 +30,9 @@ export interface CodeEntry {
   url?: string;
 }
 
+export type PopupShows = 'all' | 'codes' | 'links';
+export type CodeClickAction = 'open' | 'copy';
+
 export interface Settings {
   defaultMode: Mode;
   notifications: boolean;
@@ -38,6 +41,10 @@ export interface Settings {
   autoSubmit: boolean;
   /** Inline "Fill 123456" chip on detected fields. */
   showFillChip: boolean;
+  /** Which kinds of entries the popup list shows. */
+  popupShows: PopupShows;
+  /** What clicking a code notification does. Link notifications always open the link. */
+  codeClickAction: CodeClickAction;
 }
 
 export interface PersistedState {
@@ -74,6 +81,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fastPoll: true,
   autoSubmit: false,
   showFillChip: true,
+  popupShows: 'all',
+  codeClickAction: 'open',
 };
 
 export const EMPTY_STATE: PersistedState = {

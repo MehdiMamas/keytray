@@ -4,7 +4,7 @@ import { signInInteractive } from '~/lib/auth';
 import { FREE_ACCOUNT_LIMIT } from '~/lib/account-limit';
 import { openPaymentPage } from '~/lib/billing';
 import type { ExtensionResponse } from '~/lib/messages';
-import type { Mode, PublicState, Settings } from '~/lib/types';
+import type { CodeClickAction, Mode, PopupShows, PublicState, Settings } from '~/lib/types';
 
 const MODES: { value: Mode | ''; label: string }[] = [
   { value: '', label: 'Use default' },
@@ -179,6 +179,29 @@ export function App() {
             <option value="autofill">Auto-fill the page</option>
             <option value="autocopy">Auto-copy</option>
             <option value="nothing">Do nothing</option>
+          </select>
+        </label>
+        <label className="block text-sm">
+          Popup shows
+          <select
+            className="mt-1 block w-full rounded-md border border-line bg-white px-2 py-2"
+            value={state.settings.popupShows}
+            onChange={(event) => void updateSettings({ popupShows: event.target.value as PopupShows })}
+          >
+            <option value="all">Codes and links</option>
+            <option value="codes">Codes only</option>
+            <option value="links">Links only</option>
+          </select>
+        </label>
+        <label className="block text-sm">
+          Clicking a code notification
+          <select
+            className="mt-1 block w-full rounded-md border border-line bg-white px-2 py-2"
+            value={state.settings.codeClickAction}
+            onChange={(event) => void updateSettings({ codeClickAction: event.target.value as CodeClickAction })}
+          >
+            <option value="open">Open the email</option>
+            <option value="copy">Copy the code</option>
           </select>
         </label>
         <Toggle
