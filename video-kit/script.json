@@ -1,0 +1,58 @@
+[
+  {
+    "id": "intro",
+    "instruction": "Stay on the Example Shop page. Do nothing yet; wait for the intro to be spoken, then press Enter.",
+    "narration": "Keytray is a Chrome extension that shows the sign-in codes sent to your Gmail, so you can copy them or fill them into a page. This video shows how it asks for access to Gmail, and exactly how it uses that access."
+  },
+  {
+    "id": "open-popup",
+    "instruction": "Click the Keytray icon in the toolbar. The popup says to connect an account. Click 'Add an account', then in the Keytray settings page click 'Add account'. Press Enter when Google's page has opened.",
+    "narration": "I open Keytray's settings and choose Add account. Keytray opens Google's sign-in page, and I choose the Google account to connect. The account addresses are blurred in this video for privacy."
+  },
+  {
+    "id": "consent",
+    "instruction": "On Google's consent page, slowly show the address bar (client_id), the app name, and the permission list. Do not click Allow yet. Press Enter when done.",
+    "narration": "This is the Google consent screen. The app name is Keytray, and the OAuth client ID is visible in the address bar. Keytray asks to read your email messages and settings, which is the read-only gmail.readonly scope, plus your email address to show which account is connected. It is used only to find verification codes."
+  },
+  {
+    "id": "allow",
+    "instruction": "Pick the demo account (the account address will be blurred in the final video), then click Continue / Allow. Press Enter when you are back on the Keytray settings page.",
+    "narration": "Google also warns that the app is not yet verified, which is expected while Keytray is waiting for this review. I click Continue to allow access."
+  },
+  {
+    "id": "connected",
+    "instruction": "Stay on the Keytray settings page showing the connected account. Press Enter after a few seconds.",
+    "narration": "Back in Keytray, the new account is connected and listed on the settings page. Keytray checks for new messages about once a minute."
+  },
+  {
+    "id": "code-arrives",
+    "instruction": "Open the Keytray popup and wait until the demo email's code appears (the manager sends it now); a notification should pop up. Press Enter when you have shown both.",
+    "narration": "Now an email arrives from Example Shop with a verification code. Keytray finds the code and shows it in the popup together with the sender and the time."
+  },
+  {
+    "id": "copy",
+    "instruction": "In the popup click Copy next to the Example Shop code. Press Enter when it says Copied.",
+    "narration": "I can copy the code with one click."
+  },
+  {
+    "id": "fill",
+    "instruction": "Switch to the Example Shop tab. Click the 'Fill' button that appears inside the code field, then click Verify. Press Enter when it says Verified.",
+    "narration": "Now I open the Example Shop sign-in page. Keytray shows a Fill button on the code field. I click it, the code is entered, and I press Verify. The page confirms the code."
+  },
+  {
+    "id": "data-use",
+    "instruction": "Stay on the Example Shop page or the Keytray popup; do nothing. Press Enter when the explanation is finished.",
+    "narration": "Here is how Keytray uses your data. It only reads your recent messages, to look for verification codes. Message bodies are processed locally in your browser and are not saved. Keytray stores only the code, the sender, the subject and the time, plus the sign-in token, on your device. It cannot send, delete or change mail. No server run by the developer receives your mail, and your data is never shared or sold."
+  },
+  {
+    "id": "remove",
+    "instruction": "Open the Keytray settings page and click Remove next to the account. Press Enter when the list says No accounts connected.",
+    "narration": "In settings I remove the account. Keytray deletes that account's stored token and codes from this browser. Access can also be revoked from the Google Account permissions page."
+  },
+  {
+    "id": "outro",
+    "instruction": "Open the privacy policy page https://mehdimamas.dev/keytray/privacy/ in a new tab and leave it on screen. Press Enter after the outro.",
+    "narration": "That is Keytray. The full privacy policy is at mehdimamas dot dev, slash keytray, slash privacy. Thank you for reviewing.",
+    "subtitle": "That is Keytray. The full privacy policy is at mehdimamas.dev/keytray/privacy. Thank you for reviewing."
+  }
+]

@@ -1,0 +1,11 @@
+To: (the demo Gmail account)
+Subject: Your Example Shop verification code
+
+Hi,
+
+Your Example Shop verification code is 482913.
+
+Enter this code to finish signing in. It expires in 10 minutes.
+If you did not request it, you can ignore this email.
+
+Example Shop
