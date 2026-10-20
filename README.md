@@ -8,6 +8,6 @@ See [SETUP.md](SETUP.md) for the Google Cloud project, test users, and how to in
 
 You can remove the purchase code and build a copy for yourself. Selling it, charging for a copy, or profiting from it is reserved to the author. See [LICENSE](LICENSE).
 
-- [Home](https://mehdimamas.dev/gmail-otp-copier/)
-- [Privacy policy](https://mehdimamas.dev/gmail-otp-copier/privacy/)
-- [Terms of service](https://mehdimamas.dev/gmail-otp-copier/terms/)
+- [Home](https://mehdimamas.dev/keytray/)
+- [Privacy policy](https://mehdimamas.dev/keytray/privacy/)
+- [Terms of service](https://mehdimamas.dev/keytray/terms/)
