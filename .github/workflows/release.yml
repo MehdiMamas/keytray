@@ -146,8 +146,7 @@ jobs:
         run: |
           npx --yes chrome-webstore-upload-cli@4.0.2 upload \
             --source "dist-release/keytray-${{ needs.build.outputs.version }}-chrome-store.zip" \
-            --extension-id "$EXTENSION_ID" \
-            --client-id "$CLIENT_ID" --client-secret "$CLIENT_SECRET" --refresh-token "$REFRESH_TOKEN"
+            --extension-id "$EXTENSION_ID"
       - name: Publish for review
         if: steps.gate.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && inputs.publish
         env:
@@ -157,5 +156,4 @@ jobs:
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
           npx --yes chrome-webstore-upload-cli@4.0.2 publish \
-            --extension-id "$EXTENSION_ID" \
-            --client-id "$CLIENT_ID" --client-secret "$CLIENT_SECRET" --refresh-token "$REFRESH_TOKEN"
+            --extension-id "$EXTENSION_ID"
