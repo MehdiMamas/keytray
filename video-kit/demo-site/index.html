@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Example Shop - Verify your sign-in</title>
+<style>
+ body{margin:0;font-family:-apple-system,system-ui,Segoe UI,sans-serif;background:#f4f5f7;color:#1c1f23;display:grid;place-items:center;min-height:100vh}
+ .card{background:#fff;border-radius:14px;box-shadow:0 6px 30px rgba(0,0,0,.08);padding:40px 44px;width:380px}
+ .brand{font-weight:700;font-size:15px;color:#c2410c;letter-spacing:.04em;text-transform:uppercase}
+ h1{font-size:24px;margin:10px 0 6px} p{color:#555;margin:0 0 22px;line-height:1.45}
+ label{display:block;font-weight:600;margin-bottom:8px}
+ input{width:100%;box-sizing:border-box;font-size:26px;letter-spacing:.35em;text-align:center;padding:12px;border:2px solid #d5d8dd;border-radius:10px}
+ input:focus{outline:none;border-color:#c2410c}
+ button{margin-top:18px;width:100%;padding:13px;font-size:16px;font-weight:600;border:0;border-radius:10px;background:#c2410c;color:#fff;cursor:pointer}
+ #result{margin-top:16px;font-weight:700;min-height:24px;text-align:center}
+ .ok{color:#15803d}.bad{color:#b91c1c}
+</style></head><body>
+<form class="card" id="f" autocomplete="off">
+ <div class="brand">Example Shop</div>
+ <h1>Verify your sign-in</h1>
+ <p>We emailed you a 6-digit verification code. Enter it below to continue.</p>
+ <label for="otp">Verification code</label>
+ <input id="otp" name="otp" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000">
+ <button type="submit">Verify</button>
+ <div id="result"></div>
+</form>
+<script>
+ const DEMO_CODE='482913';
+ document.getElementById('f').addEventListener('submit',e=>{
+  e.preventDefault();
+  const v=document.getElementById('otp').value.trim(), r=document.getElementById('result');
+  if(/^\d{6}$/.test(v)){r.textContent='Verified ✓';r.className='ok';}
+  else{r.textContent='Enter the 6-digit code';r.className='bad';}
+ });
+</script></body></html>
