@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the uploaded Chrome Web Store item for review (default: upload only)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Check tag matches package.json
+        id: meta
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      - name: Check build secrets
+        env:
+          WXT_GOOGLE_CLIENT_ID: ${{ secrets.WXT_GOOGLE_CLIENT_ID }}
+          WXT_GOOGLE_CLIENT_SECRET: ${{ secrets.WXT_GOOGLE_CLIENT_SECRET }}
+        run: |
+          for name in WXT_GOOGLE_CLIENT_ID WXT_GOOGLE_CLIENT_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Repository secret $name is not set (Settings > Secrets and variables > Actions)"
+              exit 1
+            fi
+          done
+
+      - run: npm ci
+      - run: npx wxt prepare
+      - run: npm run compile
+      - run: npm test
+
+      - name: Build store and sideload zips
+        env:
+          WXT_GOOGLE_CLIENT_ID: ${{ secrets.WXT_GOOGLE_CLIENT_ID }}
+          WXT_GOOGLE_CLIENT_SECRET: ${{ secrets.WXT_GOOGLE_CLIENT_SECRET }}
+        run: |
+          v="${{ steps.meta.outputs.version }}"
+          name="multi-gmail-auth-copier-$v-chrome.zip"
+          mkdir -p dist-release
+          npm run zip
+          cp ".output/$name" "dist-release/multi-gmail-auth-copier-$v-chrome-store.zip"
+          npm run zip:sideload
+          cp ".output/$name" "dist-release/$name"
+          ls -l dist-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-zips
+          path: dist-release/*.zip
+          if-no-files-found: error
+
+      - name: Create draft release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          v="${{ steps.meta.outputs.version }}"
+          prev=$(git tag --list 'v*' --sort=-v:refname | grep -vx "$tag" | head -n1 || true)
+          {
+            echo "Keytray $v."
+            echo
+            if [ -n "$prev" ]; then
+              echo "## Changes since $prev"
+              git log "$prev..$tag" --no-merges --pretty='- %s' | grep -v -E '^- Release v' || true
+            else
+              echo "## Changes"
+              git log "$tag" --no-merges --pretty='- %s' | grep -v -E '^- Release v' || true
+            fi
+            echo
+            echo "[Chrome Web Store](https://chromewebstore.google.com/detail/keytray/kfkmcgkbicdmgdodjjindmnpofbcmoji)"
+            echo
+            echo "## Install"
+            echo "1. Download \`multi-gmail-auth-copier-$v-chrome.zip\` and unzip it."
+            echo "2. Open \`chrome://extensions\` (Edge: \`edge://extensions\`), turn on Developer mode, and Load unpacked the folder that contains \`manifest.json\`."
+            echo "3. Follow [SETUP.md](https://github.com/$GITHUB_REPOSITORY/blob/main/SETUP.md). The OAuth app stays in Testing, so each address must be a test user."
+          } > release-notes.md
+          gh release create "$tag" --draft --title "$tag" --notes-file release-notes.md \
+            "dist-release/multi-gmail-auth-copier-$v-chrome.zip" \
+            "dist-release/multi-gmail-auth-copier-$v-chrome-store.zip"
+
+  webstore:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+    steps:
+      - name: Check Chrome Web Store secrets
+        id: gate
+        run: |
+          if [ -n "$CWS_CLIENT_ID" ] && [ -n "$CWS_CLIENT_SECRET" ] && [ -n "$CWS_REFRESH_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::CWS_CLIENT_ID, CWS_CLIENT_SECRET and CWS_REFRESH_TOKEN are not all set; skipping Chrome Web Store upload."
+          fi
+      - if: steps.gate.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: release-zips
+          path: dist-release
+      - if: steps.gate.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Upload to Chrome Web Store
+        if: steps.gate.outputs.enabled == 'true'
+        env:
+          EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          npx --yes chrome-webstore-upload-cli@4.0.2 upload \
+            --source "dist-release/multi-gmail-auth-copier-${{ needs.build.outputs.version }}-chrome-store.zip" \
+            --extension-id "$EXTENSION_ID" \
+            --client-id "$CLIENT_ID" --client-secret "$CLIENT_SECRET" --refresh-token "$REFRESH_TOKEN"
+      - name: Publish for review
+        if: steps.gate.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && inputs.publish
+        env:
+          EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          npx --yes chrome-webstore-upload-cli@4.0.2 publish \
+            --extension-id "$EXTENSION_ID" \
+            --client-id "$CLIENT_ID" --client-secret "$CLIENT_SECRET" --refresh-token "$REFRESH_TOKEN"

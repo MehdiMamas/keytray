@@ -84,6 +84,21 @@ Email bodies are not stored. The extension keeps the code, sender, subject, and 
 
 `npm test` covers code extraction and the page fixtures in `test-pages/`. Open `test-pages/index.html` in a browser with the extension loaded to try detection by hand.
 
+## Releasing
+
+Add these under Settings > Secrets and variables > Actions:
+
+- `WXT_GOOGLE_CLIENT_ID`, `WXT_GOOGLE_CLIENT_SECRET`: the same OAuth client used for local builds. Required; the release fails without them.
+- `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`: optional. When all three are set, the release also uploads to the Chrome Web Store. Create an OAuth client (type Desktop app) in Google Cloud with the Chrome Web Store API enabled, then follow the [chrome-webstore-upload-cli guide](https://github.com/fregante/chrome-webstore-upload-keys) to get the refresh token.
+
+Steps:
+
+1. Run `scripts/release.sh 0.5.1`. It bumps `package.json` and `package-lock.json`, commits "Release v0.5.1." and tags it. It does not push.
+2. Push the commit and tag with the command it prints.
+3. The Release workflow checks the tag matches `package.json`, runs compile and tests, builds both zips, and creates a draft GitHub release with both attached (the `-chrome.zip` sideload build and the `-chrome-store.zip` store build). The Web Store upload only uploads; it does not submit for review.
+4. Review the draft release notes and publish it.
+5. To submit the uploaded item for Web Store review, run the Release workflow by hand (Actions > Release > Run workflow) with `publish` ticked.
+
 ## License
 
 You may use, copy, modify, and share this project, including a personal build with the purchase code removed. You may not sell it, charge for a copy, or profit from it. That stays with the author. See `LICENSE`.
