@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { browser } from 'wxt/browser';
+import { filterEntries } from '~/lib/entry-display';
 import { linkHost } from '~/lib/extract-link';
 import { gmailMessageUrl } from '~/lib/gmail';
 import type { ExtensionResponse } from '~/lib/messages';
@@ -37,8 +38,8 @@ export function App() {
 
   const codes = useMemo(() => {
     const list = state?.codes ?? [];
-    const filtered = filter === 'all' ? list : list.filter((entry) => entry.account === filter);
-    return filtered.slice(0, 5);
+    const byAccount = filter === 'all' ? list : list.filter((entry) => entry.account === filter);
+    return filterEntries(byAccount, state?.settings.popupShows ?? 'all').slice(0, 5);
   }, [state, filter]);
 
   const sync = async () => {
@@ -143,7 +144,7 @@ export function App() {
       {error && <p className="px-3 py-2 text-xs text-clay">{error}</p>}
 
       {codes.length === 0 ? (
-        <p className="px-4 py-8 text-sm text-ink/70">No codes or links yet. Request one, then hit Sync.</p>
+        <p className="px-4 py-8 text-sm text-ink/70">{state.settings.popupShows === 'codes' ? 'No codes yet.' : state.settings.popupShows === 'links' ? 'No links yet.' : 'No codes or links yet.'} Request one, then hit Sync.</p>
       ) : (
         <ul>
           {codes.map((entry) => (

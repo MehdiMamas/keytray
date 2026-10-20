@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser';
 import type { ExtensionRequest, ExtensionResponse, FillResponse } from '~/lib/messages';
 import { AuthError, HistoryExpiredError, gmailMessageUrl, pollGmail } from '~/lib/gmail';
 import { extractCode } from '~/lib/extract';
+import { notificationClickAction } from '~/lib/entry-display';
 import { extractVerificationLink, linkHost } from '~/lib/extract-link';
 import { refreshAccessToken } from '~/lib/auth';
 import { FREE_ACCOUNT_LIMIT, isNewAccountAllowed, UPGRADE_REQUIRED_ERROR } from '~/lib/account-limit';
@@ -392,6 +393,17 @@ async function openNotifiedMessage(notificationId: string): Promise<void> {
   const state = await loadState();
   const entry = state.codes.find((item) => item.id === entryId);
   if (!entry) return;
+  const action = notificationClickAction(link, state.settings.codeClickAction);
+  if (action === 'copy') {
+    await copyText(entry.code);
+    await browser.notifications.create(notificationId, {
+      type: 'basic',
+      iconUrl: browser.runtime.getURL('/icons/icon128.png'),
+      title: entry.code,
+      message: `Code copied. ${senderName(entry.from)}`,
+    });
+    return;
+  }
   if (link && entry.url?.startsWith('https://')) {
     await browser.tabs.create({ url: entry.url });
     return;
