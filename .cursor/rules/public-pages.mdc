@@ -5,13 +5,13 @@ alwaysApply: true
 
 # Published pages are the personal site
 
-https://mehdimamas.dev/gmail-otp-copier/ is the real site. Google OAuth and users open that URL. Editing `docs/` in this repository does not change it.
+https://mehdimamas.dev/keytray/ is the real site. Google OAuth and users open that URL. Editing `docs/` in this repository does not change it.
 
 When a change makes a sentence on the home page, privacy policy, or terms false, edit these files:
 
-- Home: `D:\Upwork\mehdimamas.dev\public\gmail-otp-copier\index.html` → https://mehdimamas.dev/gmail-otp-copier/
-- Privacy: `D:\Upwork\mehdimamas.dev\public\gmail-otp-copier\privacy.html` → https://mehdimamas.dev/gmail-otp-copier/privacy/
-- Terms: `D:\Upwork\mehdimamas.dev\public\gmail-otp-copier\terms.html` → https://mehdimamas.dev/gmail-otp-copier/terms/
+- Home: `D:\Upwork\mehdimamas.dev\public\keytray\index.html` → https://mehdimamas.dev/keytray/
+- Privacy: `D:\Upwork\mehdimamas.dev\public\keytray\privacy.html` → https://mehdimamas.dev/keytray/privacy/
+- Terms: `D:\Upwork\mehdimamas.dev\public\keytray\terms.html` → https://mehdimamas.dev/keytray/terms/
 
 They are static files in `public/`, outside the site layout. Leave the rewrites in `D:\Upwork\mehdimamas.dev\next.config.mjs` so the clean URLs keep serving the HTML files.
 
