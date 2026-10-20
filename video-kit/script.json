@@ -7,7 +7,7 @@
   {
     "id": "open-popup",
     "instruction": "Click the Keytray icon in the toolbar. The popup says to connect an account. Click 'Add an account', then in the Keytray settings page click 'Add account'. Press Enter when Google's page has opened.",
-    "narration": "I open the Keytray popup. No account is connected yet, so I choose Add an account, and then Add account on the settings page. Keytray now opens Google's sign-in and consent page."
+    "narration": "I open Keytray's settings and choose Add account. Keytray opens Google's sign-in page, and I choose the Google account to connect. The account addresses are blurred in this video for privacy."
   },
   {
     "id": "consent",
@@ -17,17 +17,17 @@
   {
     "id": "allow",
     "instruction": "Pick the demo account (the account address will be blurred in the final video), then click Continue / Allow. Press Enter when you are back on the Keytray settings page.",
-    "narration": "I choose the Google account and allow access. The account address is blurred in this video for privacy."
+    "narration": "Google also warns that the app is not yet verified, which is expected while Keytray is waiting for this review. I click Continue to allow access."
   },
   {
     "id": "connected",
     "instruction": "Stay on the Keytray settings page showing the connected account. Press Enter after a few seconds.",
-    "narration": "Back in Keytray, the account is connected. It is listed on the settings page, and Keytray will check for new messages about once a minute."
+    "narration": "Back in Keytray, the new account is connected and listed on the settings page. Keytray checks for new messages about once a minute."
   },
   {
     "id": "code-arrives",
     "instruction": "Open the Keytray popup and wait until the demo email's code appears (the manager sends it now); a notification should pop up. Press Enter when you have shown both.",
-    "narration": "Now an email arrives from Example Shop with a verification code. Keytray finds the code and shows it in the popup together with the sender and the time, and it shows a notification."
+    "narration": "Now an email arrives from Example Shop with a verification code. Keytray finds the code and shows it in the popup together with the sender and the time."
   },
   {
     "id": "copy",
@@ -47,7 +47,7 @@
   {
     "id": "remove",
     "instruction": "Open the Keytray settings page and click Remove next to the account. Press Enter when the list says No accounts connected.",
-    "narration": "You can stop at any time. In settings I remove the account, and Keytray deletes that account's stored token and codes from this browser. You can also revoke access from your Google Account permissions page."
+    "narration": "In settings I remove the account. Keytray deletes that account's stored token and codes from this browser. Access can also be revoked from the Google Account permissions page."
   },
   {
     "id": "outro",
