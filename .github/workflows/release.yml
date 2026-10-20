@@ -117,15 +117,16 @@ jobs:
       CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
       CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
       CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+      CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
     steps:
       - name: Check Chrome Web Store secrets
         id: gate
         run: |
-          if [ -n "$CWS_CLIENT_ID" ] && [ -n "$CWS_CLIENT_SECRET" ] && [ -n "$CWS_REFRESH_TOKEN" ]; then
+          if [ -n "$CWS_CLIENT_ID" ] && [ -n "$CWS_CLIENT_SECRET" ] && [ -n "$CWS_REFRESH_TOKEN" ] && [ -n "$CWS_PUBLISHER_ID" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CWS_CLIENT_ID, CWS_CLIENT_SECRET and CWS_REFRESH_TOKEN are not all set; skipping Chrome Web Store upload."
+            echo "::notice::CWS_CLIENT_ID, CWS_CLIENT_SECRET, CWS_REFRESH_TOKEN and the CWS_PUBLISHER_ID variable are not all set; skipping Chrome Web Store upload."
           fi
       - if: steps.gate.outputs.enabled == 'true'
         uses: actions/download-artifact@v4
@@ -140,6 +141,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         env:
           EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
+          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
@@ -151,6 +153,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && inputs.publish
         env:
           EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
+          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}

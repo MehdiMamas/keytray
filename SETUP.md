@@ -90,6 +90,7 @@ Add these under Settings > Secrets and variables > Actions:
 
 - `WXT_GOOGLE_CLIENT_ID`, `WXT_GOOGLE_CLIENT_SECRET`: the same OAuth client used for local builds. Required; the release fails without them.
 - `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`: optional. When all three are set, the release also uploads to the Chrome Web Store. Create an OAuth client (type Desktop app) in Google Cloud with the Chrome Web Store API enabled, then follow the [chrome-webstore-upload-cli guide](https://github.com/fregante/chrome-webstore-upload-keys) to get the refresh token.
+- `CWS_PUBLISHER_ID` (a repository **variable**, not a secret): your Chrome Web Store publisher ID, shown in the developer dashboard under Account. The upload tool needs it since chrome-webstore-upload-cli 4.
 
 Steps:
 
