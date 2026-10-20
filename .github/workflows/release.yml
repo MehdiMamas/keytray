@@ -102,7 +102,7 @@ jobs:
             echo "## Install"
             echo "1. Download \`multi-gmail-auth-copier-$v-chrome.zip\` and unzip it."
             echo "2. Open \`chrome://extensions\` (Edge: \`edge://extensions\`), turn on Developer mode, and Load unpacked the folder that contains \`manifest.json\`."
-            echo "3. Follow [SETUP.md](https://github.com/$GITHUB_REPOSITORY/blob/main/SETUP.md). The OAuth app stays in Testing, so each address must be a test user."
+            echo "3. Follow [SETUP.md](https://github.com/$GITHUB_REPOSITORY/blob/main/SETUP.md)."
           } > release-notes.md
           gh release create "$tag" --draft --title "$tag" --notes-file release-notes.md \
             "dist-release/multi-gmail-auth-copier-$v-chrome.zip" \
