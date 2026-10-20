@@ -149,6 +149,30 @@ jobs:
           npx --yes chrome-webstore-upload-cli@4.0.2 upload \
             --source "dist-release/keytray-${{ needs.build.outputs.version }}-chrome-store.zip" \
             --extension-id "$EXTENSION_ID"
+      - name: Show Chrome Web Store error details
+        if: failure() && steps.gate.outputs.enabled == 'true'
+        env:
+          EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
+          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: |
+          token=$(curl -s https://oauth2.googleapis.com/token \
+            -d client_id="$CLIENT_ID" -d client_secret="$CLIENT_SECRET" \
+            -d refresh_token="$REFRESH_TOKEN" -d grant_type=refresh_token | jq -r '.access_token // empty')
+          if [ -z "$token" ]; then
+            echo "::warning::Could not get an access token."
+            exit 0
+          fi
+          echo "::add-mask::$token"
+          echo "--- v2 fetchStatus ---"
+          curl -s -H "Authorization: Bearer $token" \
+            "https://chromewebstore.googleapis.com/v2/publishers/$PUBLISHER_ID/items/$EXTENSION_ID:fetchStatus" | jq .
+          echo "--- v1.1 upload ---"
+          curl -s -X PUT -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" \
+            -T "dist-release/keytray-${{ needs.build.outputs.version }}-chrome-store.zip" \
+            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$EXTENSION_ID" | jq .
       - name: Publish for review
         if: steps.gate.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && inputs.publish
         env:
