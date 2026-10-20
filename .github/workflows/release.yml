@@ -64,10 +64,10 @@ jobs:
           WXT_GOOGLE_CLIENT_SECRET: ${{ secrets.WXT_GOOGLE_CLIENT_SECRET }}
         run: |
           v="${{ steps.meta.outputs.version }}"
-          name="multi-gmail-auth-copier-$v-chrome.zip"
+          name="keytray-$v-chrome.zip"
           mkdir -p dist-release
           npm run zip
-          cp ".output/$name" "dist-release/multi-gmail-auth-copier-$v-chrome-store.zip"
+          cp ".output/$name" "dist-release/keytray-$v-chrome-store.zip"
           npm run zip:sideload
           cp ".output/$name" "dist-release/$name"
           ls -l dist-release
@@ -100,13 +100,13 @@ jobs:
             echo "[Chrome Web Store](https://chromewebstore.google.com/detail/keytray/kfkmcgkbicdmgdodjjindmnpofbcmoji)"
             echo
             echo "## Install"
-            echo "1. Download \`multi-gmail-auth-copier-$v-chrome.zip\` and unzip it."
+            echo "1. Download \`keytray-$v-chrome.zip\` and unzip it."
             echo "2. Open \`chrome://extensions\` (Edge: \`edge://extensions\`), turn on Developer mode, and Load unpacked the folder that contains \`manifest.json\`."
             echo "3. Follow [SETUP.md](https://github.com/$GITHUB_REPOSITORY/blob/main/SETUP.md)."
           } > release-notes.md
           gh release create "$tag" --draft --title "$tag" --notes-file release-notes.md \
-            "dist-release/multi-gmail-auth-copier-$v-chrome.zip" \
-            "dist-release/multi-gmail-auth-copier-$v-chrome-store.zip"
+            "dist-release/keytray-$v-chrome.zip" \
+            "dist-release/keytray-$v-chrome-store.zip"
 
   webstore:
     needs: build
@@ -145,7 +145,7 @@ jobs:
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: |
           npx --yes chrome-webstore-upload-cli@4.0.2 upload \
-            --source "dist-release/multi-gmail-auth-copier-${{ needs.build.outputs.version }}-chrome-store.zip" \
+            --source "dist-release/keytray-${{ needs.build.outputs.version }}-chrome-store.zip" \
             --extension-id "$EXTENSION_ID" \
             --client-id "$CLIENT_ID" --client-secret "$CLIENT_SECRET" --refresh-token "$REFRESH_TOKEN"
       - name: Publish for review
