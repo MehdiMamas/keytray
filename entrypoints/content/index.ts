@@ -106,6 +106,10 @@ export default defineContentScript({
 
     browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const request = message as { type?: string; code?: string; autoSubmit?: boolean };
+      if (request.type === 'HAS_OTP_FIELD') {
+        sendResponse({ hasField: getBestOtpField(0.5) !== null });
+        return;
+      }
       if (request.type !== 'FILL_OTP' || !request.code) return;
       const target = getBestOtpField(0.5);
       if (!target) {

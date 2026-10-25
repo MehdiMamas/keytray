@@ -14,6 +14,7 @@ export type ExtensionRequest =
   | { type: 'CLEAR_HISTORY' }
   | { type: 'ARCHIVE_HISTORY' }
   | { type: 'FILL_OTP'; code: string; autoSubmit: boolean }
+  | { type: 'HAS_OTP_FIELD' }
   | { type: 'OFFSCREEN_COPY'; text: string };
 
 export type ExtensionResponse =
@@ -21,3 +22,5 @@ export type ExtensionResponse =
   | { ok: false; error: string };
 
 export type FillResponse = { filled: boolean };
+
+export type HasFieldResponse = { hasField: boolean };

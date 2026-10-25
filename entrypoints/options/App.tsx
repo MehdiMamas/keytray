@@ -3,6 +3,8 @@ import { browser } from 'wxt/browser';
 import { signInInteractive } from '~/lib/auth';
 import { FREE_ACCOUNT_LIMIT } from '~/lib/account-limit';
 import { openPaymentPage } from '~/lib/billing';
+import { DEFAULT_AGENT_ALLOWLIST, normalizeAllowlist, type AgentLogEntry } from '~/lib/agent';
+import { loadAgentLog } from '~/lib/storage';
 import type { ExtensionResponse } from '~/lib/messages';
 import type { CodeClickAction, Mode, PopupShows, PublicState, Settings } from '~/lib/types';
 
@@ -17,7 +19,11 @@ export function App() {
   const [state, setState] = useState<PublicState | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [agentLog, setAgentLog] = useState<AgentLogEntry[]>([]);
+  const [allowlistText, setAllowlistText] = useState('');
+  const [allowlistDirty, setAllowlistDirty] = useState(false);
   const refresh = async () => {
+    void loadAgentLog().then(setAgentLog);
     const response = (await browser.runtime.sendMessage({ type: 'GET_STATE' })) as ExtensionResponse;
     if (response?.ok && response.state) setState(response.state);
   };
@@ -63,6 +69,30 @@ export function App() {
   const updateSettings = async (patch: Partial<Settings>) => {
     const response = (await browser.runtime.sendMessage({ type: 'SET_SETTINGS', settings: patch })) as ExtensionResponse;
     if (response?.ok && response.state) setState(response.state);
+  };
+
+  const toggleAgent = async (on: boolean) => {
+    setError('');
+    if (on) {
+      try {
+        const granted = await browser.permissions.request({ permissions: ['nativeMessaging'] });
+        if (!granted) {
+          setError('Agent sign-in needs the native messaging permission.');
+          return;
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not request the permission');
+        return;
+      }
+    }
+    await updateSettings({ agentEnabled: on });
+  };
+
+  const saveAllowlist = async (text: string) => {
+    const list = normalizeAllowlist(text.split(/[\s,]+/));
+    await updateSettings({ agentAllowlist: list });
+    setAllowlistDirty(false);
+    setAllowlistText(list.join('\n'));
   };
 
   const forgetHistory = async (type: 'CLEAR_HISTORY' | 'ARCHIVE_HISTORY') => {
@@ -243,6 +273,60 @@ export function App() {
         <p className="text-xs text-ink/60">
           Clear history forgets what was already read and syncs today’s mail again. Archive history only hides the list.
         </p>
+      </section>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-lg font-semibold">Agent sign-in</h2>
+        <p className="text-xs text-ink/60">
+          Lets a local program on this computer ask Keytray to fill the newest code, or open the newest sign-in link, in
+          a tab. The program never sees the code or the link. It needs the helper from native/install.sh.
+        </p>
+        <Toggle
+          label="Allow agent sign-in"
+          checked={state.settings.agentEnabled}
+          onChange={(on) => void toggleAgent(on)}
+        />
+        <label className="block text-sm">
+          Allowed sites (one per line, subdomains included)
+          <textarea
+            className="mt-1 block h-24 w-full rounded-md border border-line bg-white px-2 py-2 font-mono text-xs"
+            value={allowlistDirty ? allowlistText : state.settings.agentAllowlist.join('\n')}
+            onChange={(event) => {
+              setAllowlistText(event.target.value);
+              setAllowlistDirty(true);
+            }}
+          />
+        </label>
+        <div className="flex gap-2">
+          <button
+            className="rounded-md border border-line px-3 py-1.5 text-sm disabled:opacity-60"
+            disabled={!allowlistDirty}
+            onClick={() => void saveAllowlist(allowlistText)}
+          >
+            Save sites
+          </button>
+          <button
+            className="rounded-md border border-line px-3 py-1.5 text-sm"
+            onClick={() => void saveAllowlist(DEFAULT_AGENT_ALLOWLIST.join('\n'))}
+          >
+            Reset to defaults
+          </button>
+        </div>
+        <h3 className="text-sm font-semibold">Recent requests</h3>
+        {agentLog.length === 0 ? (
+          <p className="text-sm text-ink/70">No requests yet.</p>
+        ) : (
+          <ul className="max-h-64 divide-y divide-line overflow-auto rounded-lg border border-line bg-white text-xs">
+            {[...agentLog].reverse().map((entry, index) => (
+              <li key={`${entry.time}-${index}`} className="flex flex-wrap gap-x-3 px-3 py-2">
+                <span className="text-ink/60">{new Date(entry.time).toLocaleString()}</span>
+                <span className="font-medium">{entry.command}</span>
+                <span>{entry.host || '-'}</span>
+                <span className={entry.result === 'ok' ? 'text-moss' : 'text-clay'}>{entry.result}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </main>
   );
