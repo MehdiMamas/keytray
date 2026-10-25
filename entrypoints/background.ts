@@ -161,7 +161,7 @@ function agentDeps(): AgentDeps {
           const response = (await browser.tabs.sendMessage(
             tabId,
             { type: 'HAS_OTP_FIELD' },
-            { frameId: frame.frameId },
+            frame.documentId ? { documentId: frame.documentId } : { frameId: frame.frameId },
           )) as HasFieldResponse | undefined;
           if (response?.hasField) return true;
         } catch {
@@ -185,13 +185,14 @@ function agentDeps(): AgentDeps {
   };
 }
 
-async function listFrames(tabId: number): Promise<{ frameId: number; url: string }[]> {
+/** Frames of a tab with their URL. documentId pins later messages to that exact document, so a frame that navigated since never gets them. */
+async function listFrames(tabId: number): Promise<{ frameId: number; documentId?: string; url: string }[]> {
   try {
     const results = await browser.scripting.executeScript({
       target: { tabId, allFrames: true },
       func: () => location.href,
     });
-    return results.map((r) => ({ frameId: r.frameId, url: typeof r.result === 'string' ? r.result : '' }));
+    return results.map((r) => ({ frameId: r.frameId, documentId: r.documentId, url: typeof r.result === 'string' ? r.result : '' }));
   } catch {
     return [];
   }
@@ -505,7 +506,7 @@ async function fillTab(
       const response = (await browser.tabs.sendMessage(
         tabId,
         { type: 'FILL_OTP', code, autoSubmit },
-        { frameId: frame.frameId },
+        frame.documentId ? { documentId: frame.documentId } : { frameId: frame.frameId },
       )) as FillResponse | undefined;
       if (response?.filled) return true;
     } catch {
