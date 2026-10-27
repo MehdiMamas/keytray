@@ -63,8 +63,6 @@ export default defineBackground(() => {
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.otpState) void syncAgentConnection();
   });
-  browser.permissions.onAdded?.addListener(() => void syncAgentConnection());
-  browser.permissions.onRemoved?.addListener(() => void syncAgentConnection());
 });
 
 // ---- Agent sign-in (native messaging bridge) ----
@@ -76,12 +74,7 @@ let reconnectDelay = 1000;
 
 async function agentShouldRun(): Promise<boolean> {
   const state = await loadState();
-  if (!state.settings.agentEnabled) return false;
-  try {
-    return await browser.permissions.contains({ permissions: ['nativeMessaging'] });
-  } catch {
-    return false;
-  }
+  return state.settings.agentEnabled;
 }
 
 async function syncAgentConnection(): Promise<void> {
