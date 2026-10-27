@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
-import type { ExtensionRequest, ExtensionResponse, FillResponse } from '~/lib/messages';
+import type { ExtensionRequest, ExtensionResponse, FillResponse, HasFieldResponse } from '~/lib/messages';
+import { RateLimiter, runAgentCommand, type AgentDeps, type AgentRequest } from '~/lib/agent';
 import { AuthError, HistoryExpiredError, gmailMessageUrl, pollGmail } from '~/lib/gmail';
 import { extractCode } from '~/lib/extract';
 import { notificationClickAction } from '~/lib/entry-display';
@@ -7,7 +8,15 @@ import { extractVerificationLink, linkHost } from '~/lib/extract-link';
 import { refreshAccessToken } from '~/lib/auth';
 import { FREE_ACCOUNT_LIMIT, isNewAccountAllowed, UPGRADE_REQUIRED_ERROR } from '~/lib/account-limit';
 import { cachePaid, createExtPay, readPaid, refreshPaid } from '~/lib/billing';
-import { loadState, resolveMode, saveState, toPublicState } from '~/lib/storage';
+import {
+  addAgentLog,
+  loadAgentUsed,
+  loadState,
+  markAgentUsed,
+  resolveMode,
+  saveState,
+  toPublicState,
+} from '~/lib/storage';
 import {
   CODE_MAX_AGE_MS,
   MAX_CODES,
@@ -50,7 +59,144 @@ export default defineBackground(() => {
       });
     return true;
   });
+  void syncAgentConnection();
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.otpState) void syncAgentConnection();
+  });
+  browser.permissions.onAdded?.addListener(() => void syncAgentConnection());
+  browser.permissions.onRemoved?.addListener(() => void syncAgentConnection());
 });
+
+// ---- Agent sign-in (native messaging bridge) ----
+const NATIVE_HOST = 'com.keytray.agent';
+const agentLimiter = new RateLimiter();
+let nativePort: ReturnType<typeof browser.runtime.connectNative> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let reconnectDelay = 1000;
+
+async function agentShouldRun(): Promise<boolean> {
+  const state = await loadState();
+  if (!state.settings.agentEnabled) return false;
+  try {
+    return await browser.permissions.contains({ permissions: ['nativeMessaging'] });
+  } catch {
+    return false;
+  }
+}
+
+async function syncAgentConnection(): Promise<void> {
+  const run = await agentShouldRun();
+  if (!run) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = undefined;
+    if (nativePort) {
+      const port = nativePort;
+      nativePort = null;
+      port.disconnect();
+    }
+    return;
+  }
+  if (!nativePort) connectAgent();
+}
+
+function connectAgent(): void {
+  let port: ReturnType<typeof browser.runtime.connectNative>;
+  try {
+    port = browser.runtime.connectNative(NATIVE_HOST);
+  } catch (error) {
+    console.error('[Keytray] agent host unavailable', error);
+    scheduleReconnect();
+    return;
+  }
+  nativePort = port;
+  port.onMessage.addListener((message: unknown) => {
+    const request = message as AgentRequest;
+    void runAgentCommand(request, agentDeps())
+      .catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : 'failed' }))
+      .then((reply) => {
+        try {
+          port.postMessage({ id: request.id, ...reply });
+        } catch {
+          // Port closed while the command ran.
+        }
+      });
+  });
+  port.onDisconnect.addListener(() => {
+    if (nativePort === port) nativePort = null;
+    scheduleReconnect();
+  });
+  reconnectDelay = 1000;
+}
+
+function scheduleReconnect(): void {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = undefined;
+    void agentShouldRun().then((run) => {
+      if (run && !nativePort) connectAgent();
+    });
+  }, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, 60_000);
+}
+
+function agentDeps(): AgentDeps {
+  return {
+    now: () => Date.now(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    getConfig: async () => {
+      const { settings } = await loadState();
+      return { enabled: settings.agentEnabled, allowlist: settings.agentAllowlist };
+    },
+    getTabUrl: async (tabId) => {
+      try {
+        return (await browser.tabs.get(tabId)).url ?? null;
+      } catch {
+        return null;
+      }
+    },
+    hasCodeField: async (tabId) => {
+      const frames = await listFrames(tabId);
+      for (const frame of frames) {
+        try {
+          const response = (await browser.tabs.sendMessage(
+            tabId,
+            { type: 'HAS_OTP_FIELD' },
+            frame.documentId ? { documentId: frame.documentId } : { frameId: frame.frameId },
+          )) as HasFieldResponse | undefined;
+          if (response?.hasField) return true;
+        } catch {
+          // No content script in that frame.
+        }
+      }
+      return false;
+    },
+    getEntries: async () => (await loadState()).codes,
+    getUsed: loadAgentUsed,
+    markUsed: markAgentUsed,
+    fill: async (tabId, code, isFrameAllowed) => fillTab(tabId, code, false, isFrameAllowed),
+    navigate: async (tabId, url) => {
+      await browser.tabs.update(tabId, { url });
+    },
+    poll: async () => {
+      await enqueue(() => pollAccounts());
+    },
+    limiter: agentLimiter,
+    addLog: addAgentLog,
+  };
+}
+
+/** Frames of a tab with their URL. documentId pins later messages to that exact document, so a frame that navigated since never gets them. */
+async function listFrames(tabId: number): Promise<{ frameId: number; documentId?: string; url: string }[]> {
+  try {
+    const results = await browser.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func: () => location.href,
+    });
+    return results.map((r) => ({ frameId: r.frameId, documentId: r.documentId, url: typeof r.result === 'string' ? r.result : '' }));
+  } catch {
+    return [];
+  }
+}
 
 async function ensureAlarm(): Promise<void> {
   const existing = await browser.alarms.get('poll');
@@ -343,21 +489,24 @@ async function actOnNewest(state: PersistedState, fresh: CodeEntry[]): Promise<v
 async function fillActiveTab(code: string, autoSubmit: boolean): Promise<boolean> {
   const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab?.id) return false;
-  let frames: { frameId: number }[] = [];
-  try {
-    frames = await browser.scripting.executeScript({
-      target: { tabId: tab.id, allFrames: true },
-      func: () => true,
-    });
-  } catch {
-    return false;
-  }
+  return fillTab(tab.id, code, autoSubmit);
+}
+
+/** Fills the code into a tab. With isFrameAllowed, frames whose URL fails it never receive the code. */
+async function fillTab(
+  tabId: number,
+  code: string,
+  autoSubmit: boolean,
+  isFrameAllowed?: (url: string) => boolean,
+): Promise<boolean> {
+  const frames = await listFrames(tabId);
   for (const frame of frames) {
+    if (isFrameAllowed && !isFrameAllowed(frame.url)) continue;
     try {
       const response = (await browser.tabs.sendMessage(
-        tab.id,
+        tabId,
         { type: 'FILL_OTP', code, autoSubmit },
-        { frameId: frame.frameId },
+        frame.documentId ? { documentId: frame.documentId } : { frameId: frame.frameId },
       )) as FillResponse | undefined;
       if (response?.filled) return true;
     } catch {

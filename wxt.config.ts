@@ -18,6 +18,7 @@ export default defineConfig({
       'Reads verification codes and sign-in links from your Gmail accounts. Codes can be filled or copied. Links open when you choose.',
     ...(mode === 'store' ? {} : { key: EXTENSION_KEY }),
     permissions: ['identity', 'storage', 'alarms', 'offscreen', 'notifications', 'scripting'],
+    optional_permissions: ['nativeMessaging'],
     host_permissions: [
       'https://gmail.googleapis.com/*',
       'https://www.googleapis.com/*',

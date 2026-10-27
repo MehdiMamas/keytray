@@ -45,6 +45,10 @@ export interface Settings {
   popupShows: PopupShows;
   /** What clicking a code notification does. Link notifications always open the link. */
   codeClickAction: CodeClickAction;
+  /** Let a local agent ask Keytray to fill a code or open a link. Off by default. */
+  agentEnabled: boolean;
+  /** Sites the agent may act on: exact host or any subdomain. */
+  agentAllowlist: string[];
 }
 
 export interface PersistedState {
@@ -83,6 +87,8 @@ export const DEFAULT_SETTINGS: Settings = {
   showFillChip: true,
   popupShows: 'all',
   codeClickAction: 'open',
+  agentEnabled: false,
+  agentAllowlist: ['github.com', 'google.com', 'vercel.com', 'apple.com'],
 };
 
 export const EMPTY_STATE: PersistedState = {
