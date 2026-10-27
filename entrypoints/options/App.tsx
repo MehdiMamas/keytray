@@ -73,18 +73,6 @@ export function App() {
 
   const toggleAgent = async (on: boolean) => {
     setError('');
-    if (on) {
-      try {
-        const granted = await browser.permissions.request({ permissions: ['nativeMessaging'] });
-        if (!granted) {
-          setError('Agent sign-in needs the native messaging permission.');
-          return;
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not request the permission');
-        return;
-      }
-    }
     await updateSettings({ agentEnabled: on });
   };
 

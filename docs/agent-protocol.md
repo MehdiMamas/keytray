@@ -7,7 +7,7 @@ How a local program talks to Keytray's agent bridge (`native/keytray-agent.py`).
 - macOS: `~/Library/Application Support/Keytray/agent.sock`
 - Linux: `${XDG_DATA_HOME:-~/.local/share}/Keytray/agent.sock`
 - Override: `KEYTRAY_AGENT_SOCK` (read by both the host and the CLI).
-- Unix stream socket, mode 0600, directory 0700. The host is started by the extension (`connectNative`) only while Agent sign-in is on in Options and the `nativeMessaging` permission is granted. The host removes the socket when it exits. So "off" usually shows up as a missing socket, not as a reply.
+- Unix stream socket, mode 0600, directory 0700. The host is started by the extension (`connectNative`) only while Agent sign-in is on in Options. The host removes the socket when it exits. So "off" usually shows up as a missing socket, not as a reply.
 
 ## Framing
 
