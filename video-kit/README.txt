@@ -9,4 +9,6 @@ Fallback if Google blocks sign-in in Chrome for Testing: in branded Chrome use a
 open chrome://extensions, enable Developer mode, Load unpacked -> ../.output/chrome-mv3
 (same id kfkmcgkbicdmgdodjjindmnpofbcmoji), then record with record.sh using that window
 (set the process name in record.sh osascript line to "Google Chrome").
+Steps: consent expands each scope; gmail-source shows the demo email in the Gmail inbox; open-in-gmail uses the popup's Open in Gmail on the code;
+  gmail-unchanged shows the message still in the inbox, untouched; permissions shows Keytray at myaccount.google.com/permissions before remove.
 Privacy: first sync reads the last day of mail; use a clean Gmail account or blur the popup list.

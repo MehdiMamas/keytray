@@ -95,6 +95,19 @@ describe('pollGmail', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('first sync only lists inbox mail from the last day', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (input: string) => {
+      const url = String(input);
+      calls.push(url);
+      if (url.endsWith('/profile')) return json({ historyId: '1' });
+      if (url.includes('/messages?')) return json({});
+      throw new Error(`unexpected ${url}`);
+    });
+    await pollGmail('token', undefined);
+    expect(decodeURIComponent(calls.find((url) => url.includes('/messages?')) ?? '')).toContain('q=in:inbox newer_than:1d');
+  });
+
   it('throws GmailApiError when Gmail returns 500', async () => {
     vi.stubGlobal('fetch', async () => new Response('', { status: 500 }));
     await expect(pollGmail('token', undefined)).rejects.toBeInstanceOf(GmailApiError);
