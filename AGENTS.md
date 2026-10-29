@@ -20,4 +20,4 @@ Keytray: a Chrome, Edge and Brave extension (WXT, React, TypeScript) that reads 
 
 ## Gotchas
 - The extension id is fixed to the Chrome Web Store item, so unpacked installs use the same Google redirect URI (`SETUP.md`).
-- The live home, privacy and terms pages are on the author's personal site, not the `docs/*.html` files here; editing those does not change the site (see `.cursor/rules/public-pages.mdc`).
+- The live home, privacy and terms pages are on the author's personal site, not the `docs/*.html` files here; editing those does not change the site (see `.cursor/rules/public-pages.mdc`). The privacy page is `public/keytray/privacy.html` in the mehdimamas.dev repo, not `docs/`.

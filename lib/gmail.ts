@@ -92,7 +92,7 @@ async function fullSync(token: string): Promise<{ messages: ParsedMessage[]; his
 async function listRecent(token: string): Promise<ParsedMessage[]> {
   const listed = await gmailGet<{ messages?: { id: string }[] }>(
     token,
-    'messages?q=newer_than:1d&maxResults=15',
+    'messages?q=in:inbox newer_than:1d&maxResults=15',
   );
   const messages: ParsedMessage[] = [];
   for (const item of listed.messages ?? []) {

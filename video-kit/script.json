@@ -11,8 +11,8 @@
   },
   {
     "id": "consent",
-    "instruction": "On Google's consent page, slowly show the address bar (client_id), the app name, and the permission list. Do not click Allow yet. Press Enter when done.",
-    "narration": "This is the Google consent screen. The app name is Keytray, and the OAuth client ID is visible in the address bar. Keytray asks to read your email messages and settings, which is the read-only gmail.readonly scope, plus your email address to show which account is connected. It is used only to find verification codes."
+    "instruction": "On Google's consent page, slowly show the address bar (client_id), the app name, and the permission list. Expand each scope's details (or click 'Show all services') and hold 3 seconds on each. Do not click Allow yet. Press Enter when done.",
+    "narration": "This is the Google consent screen. The app name is Keytray, and the OAuth client ID is visible in the address bar. Keytray asks for two things. The first is gmail.readonly, shown as Read your email messages and settings. Keytray uses it only to find codes and sign-in links. The second is userinfo.email, which is used only to label the connected account."
   },
   {
     "id": "allow",
@@ -25,9 +25,19 @@
     "narration": "Back in Keytray, the new account is connected and listed on the settings page. Keytray checks for new messages about once a minute."
   },
   {
+    "id": "gmail-source",
+    "instruction": "Open Gmail in this same window, in the inbox. Open the demo email from Example Shop (code 482913) and hold on it. Press Enter when done.",
+    "narration": "This is the email Keytray reads. It reads only inbox mail from the last day, and then new inbox mail as it arrives."
+  },
+  {
     "id": "code-arrives",
     "instruction": "Open the Keytray popup and wait until the demo email's code appears (the manager sends it now); a notification should pop up. Press Enter when you have shown both.",
     "narration": "Now an email arrives from Example Shop with a verification code. Keytray finds the code and shows it in the popup together with the sender and the time."
+  },
+  {
+    "id": "open-in-gmail",
+    "instruction": "In the Keytray popup, click 'Open in Gmail' on the Example Shop code. Press Enter when Gmail shows the same message.",
+    "narration": "The Open in Gmail button on the code takes me to that same message."
   },
   {
     "id": "copy",
@@ -42,7 +52,17 @@
   {
     "id": "data-use",
     "instruction": "Stay on the Example Shop page or the Keytray popup; do nothing. Press Enter when the explanation is finished.",
-    "narration": "Here is how Keytray uses your data. It only reads your recent messages, to look for verification codes. Message bodies are processed locally in your browser and are not saved. Keytray stores only the code, the sender, the subject and the time, plus the sign-in token, on your device. It cannot send, delete or change mail. No server run by the developer receives your mail, and your data is never shared or sold."
+    "narration": "Here is how Keytray uses your data. It stores the code or link, the sender, the subject, the time and the sign-in tokens. They are stored in this browser only. Message bodies are never stored. There is no server run by the developer. Keytray cannot send, delete or change mail, and your data is never shared or sold."
+  },
+  {
+    "id": "gmail-unchanged",
+    "instruction": "Go back to the Gmail inbox. Show that the message is still in the inbox, with no labels, and not moved or deleted. Press Enter when done.",
+    "narration": "The message is still in the inbox. It has no labels and has not been moved or deleted. Keytray only has read-only access."
+  },
+  {
+    "id": "permissions",
+    "instruction": "Open https://myaccount.google.com/permissions in a new tab and show Keytray in the list. Press Enter when done.",
+    "narration": "Keytray is listed on the Google Account permissions page. Access can be removed there at any time."
   },
   {
     "id": "remove",

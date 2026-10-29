@@ -1,13 +1,17 @@
 {
   "intro": 12.607,
   "open-popup": 10.503,
-  "consent": 18.596,
+  "consent": 21.289,
   "allow": 8.572,
   "connected": 7.307,
+  "gmail-source": 6.871,
   "code-arrives": 8.377,
+  "open-in-gmail": 3.76,
   "copy": 2.179,
   "fill": 10.839,
-  "data-use": 24.619,
+  "data-use": 18.523,
+  "gmail-unchanged": 7.048,
+  "permissions": 5.617,
   "remove": 9.587,
   "outro": 8.183
 }

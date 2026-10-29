@@ -13,6 +13,7 @@ import {
   loadAgentUsed,
   loadState,
   markAgentUsed,
+  removeAgentUsed,
   resolveMode,
   saveState,
   toPublicState,
@@ -269,6 +270,7 @@ async function handleMessage(message: ExtensionRequest): Promise<ExtensionRespon
       const next = await enqueue(async () => {
         const state = await loadState();
         state.accounts = state.accounts.filter((account) => account.email !== message.email);
+        await removeAgentUsed(state.codes.filter((code) => code.account === message.email).map((code) => code.id));
         state.codes = state.codes.filter((code) => code.account !== message.email);
         state.processedIds = state.processedIds.filter((id) => !id.startsWith(`${message.email}:`));
         await saveState(state);

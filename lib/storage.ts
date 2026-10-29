@@ -73,3 +73,9 @@ export async function markAgentUsed(id: string): Promise<void> {
   const used = [...(await loadAgentUsed()), id].slice(-AGENT_USED_MAX);
   await browser.storage.local.set({ [AGENT_USED_KEY]: used });
 }
+
+export async function removeAgentUsed(ids: readonly string[]): Promise<void> {
+  const drop = new Set(ids);
+  const kept = [...(await loadAgentUsed())].filter((id) => !drop.has(id));
+  await browser.storage.local.set({ [AGENT_USED_KEY]: kept });
+}
