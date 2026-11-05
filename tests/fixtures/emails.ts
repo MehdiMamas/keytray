@@ -43,6 +43,18 @@ export const emailFixtures: EmailFixture[] = [
     expect: 'A1B2C3',
   },
   {
+    name: 'hyphenated alphanumeric code',
+    subject: 'Your verification code',
+    body: 'Your verification code is AB3-9K2.',
+    expect: 'AB39K2',
+  },
+  {
+    name: 'hyphenated order reference is not a code',
+    subject: 'Order confirmation',
+    body: 'Your order number is ORD-48213.',
+    expect: null,
+  },
+  {
     name: 'order number is not a code',
     subject: 'Order confirmation',
     body: 'Thanks for your order. Your order number is 48219375.',
