@@ -1,12 +1,26 @@
-# Keytray
+Chrome, Edge and Brave extension that reads verification codes and sign-in links from Gmail and fills, copies or shows them.
 
-Chrome, Edge, and Brave extension that reads verification codes and sign-in links from Gmail accounts. One account is free. A one-time purchase unlocks more. For each new code it can auto-fill the page, copy the code, or only keep it in the popup. A verification link can be opened from the popup. Mail is read in the browser with the Gmail readonly scope. Checkout for extra accounts is ExtensionPay and Stripe.
+<img src="public/icons/icon128.png" alt="Keytray icon" width="64" height="64">
 
-[Chrome Web Store](https://chromewebstore.google.com/detail/keytray/kfkmcgkbicdmgdodjjindmnpofbcmoji)
+![Keytray showing recent codes, then filling one into a verification page](docs/images/demo.gif)
 
-See [SETUP.md](SETUP.md) for the Google Cloud project, test users, and how to install it unpacked.
+One account is free. A one-time purchase unlocks more. For each new code it can auto-fill the page, copy the code, or only keep it in the popup. A verification link can be opened from the popup. Mail is read in the browser with the Gmail readonly scope. Checkout for extra accounts is ExtensionPay and Stripe.
 
-You can remove the purchase code and build a copy for yourself. Selling it, charging for a copy, or profiting from it is reserved to the author. See [LICENSE](LICENSE).
+## Install
+
+- Chrome Web Store: [Keytray](https://chromewebstore.google.com/detail/keytray/kfkmcgkbicdmgdodjjindmnpofbcmoji).
+- From a release: download `keytray-<version>-chrome.zip` from [Releases](https://github.com/MehdiMamas/keytray/releases), unzip it, open `chrome://extensions` (Edge: `edge://extensions`), turn on Developer mode and choose Load unpacked on the folder that contains `manifest.json`.
+- From source (needs Node.js and [pnpm](https://pnpm.io)): `pnpm install && pnpm build`, then load `.output/chrome-mv3` unpacked. Building needs your own Google OAuth client; [SETUP.md](SETUP.md) has the Google Cloud project, test users and `.env` steps.
+
+## License
+
+You can remove the purchase code and build a copy for yourself. Selling it, charging for a copy, or profiting from it is reserved to the author. See [LICENSE](LICENSE). This is not an OSI open-source license: use, modify and share for yourself, but do not sell it or charge for it.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Links
 
 - [Home](https://mehdimamas.dev/keytray/)
 - [Privacy policy](https://mehdimamas.dev/keytray/privacy/)

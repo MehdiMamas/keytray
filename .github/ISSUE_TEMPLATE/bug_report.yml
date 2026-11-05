@@ -1,0 +1,26 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw instead.
+    validations:
+      required: true
+  - type: input
+    id: site
+    attributes:
+      label: Site or email sender (if relevant)
+      description: For a code that was not found or filled, the site and the kind of email. Do not paste the code or the email body.
+  - type: input
+    id: version
+    attributes:
+      label: Keytray version
+      description: Shown on chrome://extensions.
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: Chrome 130 on Windows 11
