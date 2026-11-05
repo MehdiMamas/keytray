@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: scripts/release.sh <version>   e.g. scripts/release.sh 0.5.1
-# Bumps package.json + package-lock.json, commits and tags. Never pushes.
+# Bumps package.json, commits and tags. Never pushes.
 set -euo pipefail
 
 v="${1:-}"
@@ -19,8 +19,8 @@ if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then
   exit 1
 fi
 
-npm version "$v" --no-git-tag-version
-git add package.json package-lock.json
+pnpm pkg set version="$v"
+git add package.json
 git commit -m "Release v$v."
 git tag "v$v"
 

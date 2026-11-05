@@ -17,15 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
-      - run: npm ci
-      - run: npx wxt prepare
-      - run: npm run compile
-      - run: npm test
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec wxt prepare
+      - run: pnpm compile
+      - run: pnpm test
+      - run: pnpm build
         env:
           WXT_GOOGLE_CLIENT_ID: ci-dummy-client-id
           WXT_GOOGLE_CLIENT_SECRET: ci-dummy-client-secret

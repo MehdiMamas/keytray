@@ -36,9 +36,9 @@ WXT_GOOGLE_CLIENT_SECRET=GOCSPX-...
 ```
 
 ```bash
-npm install
-npm test
-npm run build
+pnpm install
+pnpm test
+pnpm build
 ```
 
 Load `.output/chrome-mv3` unpacked. That folder includes the extension `key`, so the install id stays `kfkmcgkbicdmgdodjjindmnpofbcmoji`, the same id as the Chrome Web Store item.
@@ -46,13 +46,13 @@ Load `.output/chrome-mv3` unpacked. That folder includes the extension `key`, so
 To send that same unpacked build to friends:
 
 ```bash
-npm run zip:sideload
+pnpm zip:sideload
 ```
 
 The Chrome Web Store rejects a package that contains `key`. Use this zip for the store upload:
 
 ```bash
-npm run zip
+pnpm zip
 ```
 
 Zips are written under `.output`. The store package omits `key`; Chrome still assigns `kfkmcgkbicdmgdodjjindmnpofbcmoji` because that id belongs to this public key. The authorized redirect URI is `https://kfkmcgkbicdmgdodjjindmnpofbcmoji.chromiumapp.org/`.
@@ -82,7 +82,7 @@ Email bodies are not stored. The extension keeps the code, sender, subject, and 
 
 ## Tests
 
-`npm test` covers code extraction and the page fixtures in `test-pages/`. Open `test-pages/index.html` in a browser with the extension loaded to try detection by hand.
+`pnpm test` covers code extraction and the page fixtures in `test-pages/`. Open `test-pages/index.html` in a browser with the extension loaded to try detection by hand.
 
 ## Releasing
 
