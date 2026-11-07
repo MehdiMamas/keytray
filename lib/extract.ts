@@ -39,6 +39,7 @@ export function extractCode(subject: string, body: string): string | null {
   }
 
   const alnumRe = /(?<![A-Za-z0-9])(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{6,8}(?![A-Za-z0-9])/g;
+  const hyphenAlnumRe = /(?<![A-Za-z0-9])([A-Za-z0-9]{3,4}-[A-Za-z0-9]{3,4})(?![A-Za-z0-9])/g;
   for (const match of text.matchAll(alnumRe)) {
     const code = match[0] ?? '';
     if (isRejectedNumber(text, match.index ?? 0, code, code)) continue;
@@ -49,7 +50,21 @@ export function extractCode(subject: string, body: string): string | null {
       alphanumeric: true,
     });
   }
+  for (const match of text.matchAll(hyphenAlnumRe)) {
+    const raw = match[1] ?? '';
+    const code = raw.replace('-', '');
 
+    if (!/[A-Za-z]/.test(code) || !/\d/.test(code)) continue;
+    if (isRejectedNumber(text, match.index ?? 0, raw, code)) continue;
+
+    candidates.push({
+      code,
+      index: match.index ?? 0,
+      inSubject: (match.index ?? 0) <= subjectEnd,
+      alphanumeric: true,
+    });
+  }
+  
   let best: { code: string; score: number } | null = null;
   for (const candidate of candidates) {
     const distance = nearestKeywordDistance(text, candidate.index);
