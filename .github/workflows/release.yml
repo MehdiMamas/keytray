@@ -26,10 +26,11 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: npm
+          cache: pnpm
 
       - name: Check tag matches package.json
         id: meta
@@ -53,10 +54,10 @@ jobs:
             fi
           done
 
-      - run: npm ci
-      - run: npx wxt prepare
-      - run: npm run compile
-      - run: npm test
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec wxt prepare
+      - run: pnpm compile
+      - run: pnpm test
 
       - name: Build store and sideload zips
         env:
@@ -66,9 +67,9 @@ jobs:
           v="${{ steps.meta.outputs.version }}"
           name="keytray-$v-chrome.zip"
           mkdir -p dist-release
-          npm run zip
+          pnpm zip
           cp ".output/$name" "dist-release/keytray-$v-chrome-store.zip"
-          npm run zip:sideload
+          pnpm zip:sideload
           cp ".output/$name" "dist-release/$name"
           ls -l dist-release
 
