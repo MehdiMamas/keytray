@@ -79,3 +79,40 @@ export async function removeAgentUsed(ids: readonly string[]): Promise<void> {
   const kept = [...(await loadAgentUsed())].filter((id) => !drop.has(id));
   await browser.storage.local.set({ [AGENT_USED_KEY]: kept });
 }
+
+const CUSTOM_OAUTH_KEY = 'customOAuth';
+export const GOOGLE_CLIENT_ID_SUFFIX = '.apps.googleusercontent.com';
+
+export interface CustomOAuth {
+  clientId: string;
+  clientSecret: string;
+}
+
+/** Trims both fields. Returns an error text, or the clean pair. */
+export function validateCustomOAuth(input: {
+  clientId?: string;
+  clientSecret?: string;
+}): { ok: true; value: CustomOAuth } | { ok: false; error: string } {
+  const clientId = (input.clientId ?? '').trim();
+  const clientSecret = (input.clientSecret ?? '').trim();
+  if (!clientId || !clientSecret) return { ok: false, error: 'Enter both the Client ID and the Client secret.' };
+  if (!clientId.endsWith(GOOGLE_CLIENT_ID_SUFFIX)) {
+    return { ok: false, error: `The Client ID must end in ${GOOGLE_CLIENT_ID_SUFFIX}` };
+  }
+  return { ok: true, value: { clientId, clientSecret } };
+}
+
+/** Kept apart from PersistedState so the secret is never copied to popup or options state. */
+export async function loadCustomOAuth(): Promise<CustomOAuth | undefined> {
+  const stored = await browser.storage.local.get(CUSTOM_OAUTH_KEY);
+  const raw = stored[CUSTOM_OAUTH_KEY] as Partial<CustomOAuth> | undefined;
+  return raw?.clientId && raw.clientSecret ? { clientId: raw.clientId, clientSecret: raw.clientSecret } : undefined;
+}
+
+export async function saveCustomOAuth(value: CustomOAuth): Promise<void> {
+  await browser.storage.local.set({ [CUSTOM_OAUTH_KEY]: value });
+}
+
+export async function clearCustomOAuth(): Promise<void> {
+  await browser.storage.local.remove(CUSTOM_OAUTH_KEY);
+}

@@ -14,7 +14,7 @@ vi.mock('wxt/browser', () => ({
   },
 }));
 
-import { loadAgentUsed, removeAgentUsed } from '~/lib/storage';
+import { loadAgentUsed, removeAgentUsed, validateCustomOAuth } from '~/lib/storage';
 
 describe('removeAgentUsed', () => {
   beforeEach(() => {
@@ -25,5 +25,25 @@ describe('removeAgentUsed', () => {
     store.agentUsed = ['a:1', 'a:2', 'b:1'];
     await removeAgentUsed(['a:1', 'a:2']);
     expect([...(await loadAgentUsed())]).toEqual(['b:1']);
+  });
+});
+
+describe('validateCustomOAuth', () => {
+  const id = 'abc.apps.googleusercontent.com';
+
+  it('trims both fields', () => {
+    expect(validateCustomOAuth({ clientId: `  ${id} `, clientSecret: ' s ' })).toEqual({
+      ok: true,
+      value: { clientId: id, clientSecret: 's' },
+    });
+  });
+
+  it('asks for both when the secret is empty', () => {
+    expect(validateCustomOAuth({ clientId: id, clientSecret: '  ' }).ok).toBe(false);
+  });
+
+  it('rejects a Client ID that does not end in .apps.googleusercontent.com', () => {
+    const result = validateCustomOAuth({ clientId: 'abc', clientSecret: 's' });
+    expect(result.ok).toBe(false);
   });
 });

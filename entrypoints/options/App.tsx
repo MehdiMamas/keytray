@@ -4,7 +4,7 @@ import { signInInteractive } from '~/lib/auth';
 import { FREE_ACCOUNT_LIMIT } from '~/lib/account-limit';
 import { openPaymentPage } from '~/lib/billing';
 import { DEFAULT_AGENT_ALLOWLIST, normalizeAllowlist, type AgentLogEntry } from '~/lib/agent';
-import { loadAgentLog } from '~/lib/storage';
+import { loadAgentLog, validateCustomOAuth } from '~/lib/storage';
 import type { ExtensionResponse } from '~/lib/messages';
 import type { CodeClickAction, Mode, PopupShows, PublicState, Settings } from '~/lib/types';
 
@@ -316,7 +316,105 @@ export function App() {
           </ul>
         )}
       </section>
+
+      <CustomClientSection state={state} onState={setState} />
     </main>
+  );
+}
+
+const SETUP_GUIDE_URL = 'https://github.com/MehdiMamas/keytray/blob/main/SETUP.md';
+
+function CustomClientSection({ state, onState }: { state: PublicState; onState: (state: PublicState) => void }) {
+  const saved = state.customOAuth;
+  const [clientId, setClientId] = useState(saved?.clientId ?? '');
+  const [clientSecret, setClientSecret] = useState('');
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const redirectUri = browser.identity.getRedirectURL();
+  const reconnectWarning =
+    state.accounts.length > 0
+      ? 'Accounts connected with the current Google client stop working and must be reconnected. Their codes are kept. Continue?'
+      : '';
+
+  const send = async (message: { type: 'SET_CUSTOM_OAUTH'; clientId: string; clientSecret: string } | { type: 'CLEAR_CUSTOM_OAUTH' }) => {
+    if (reconnectWarning && !window.confirm(reconnectWarning)) return;
+    const response = (await browser.runtime.sendMessage(message)) as ExtensionResponse;
+    if (!response?.ok) {
+      setError(response?.error || 'Could not save');
+      return;
+    }
+    if (response.state) onState(response.state);
+    setError('');
+    setClientSecret('');
+    if (message.type === 'CLEAR_CUSTOM_OAUTH') setClientId('');
+  };
+
+  const save = async () => {
+    const checked = validateCustomOAuth({ clientId, clientSecret });
+    if (!checked.ok) {
+      setError(checked.error);
+      return;
+    }
+    setClientId(checked.value.clientId);
+    await send({ type: 'SET_CUSTOM_OAUTH', ...checked.value });
+  };
+
+  return (
+    <details className="mt-8">
+      <summary className="cursor-pointer text-lg font-semibold">Advanced: use your own Google sign-in client</summary>
+      <div className="mt-3 space-y-3">
+        <p className="text-xs text-ink/60">
+          Replaces the built-in Google client. Step-by-step guide:{' '}
+          <a className="text-moss underline" href={SETUP_GUIDE_URL} target="_blank" rel="noreferrer">
+            SETUP.md
+          </a>
+          . Add this redirect URI to your client:
+        </p>
+        <div className="flex items-center gap-2">
+          <code className="min-w-0 flex-1 break-all rounded-md border border-line bg-white px-2 py-1.5 text-xs">{redirectUri}</code>
+          <button
+            className="rounded-md border border-line px-3 py-1.5 text-sm"
+            onClick={() => {
+              void navigator.clipboard.writeText(redirectUri).then(() => setCopied(true));
+            }}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+        <label className="block text-sm">
+          Client ID
+          <input
+            className="mt-1 block w-full rounded-md border border-line bg-white px-2 py-2 font-mono text-xs"
+            value={clientId}
+            onChange={(event) => setClientId(event.target.value)}
+          />
+        </label>
+        <label className="block text-sm">
+          Client secret
+          <input
+            type="password"
+            autoComplete="off"
+            className="mt-1 block w-full rounded-md border border-line bg-white px-2 py-2 font-mono text-xs"
+            placeholder={saved?.hasSecret ? 'Saved (hidden)' : ''}
+            value={clientSecret}
+            onChange={(event) => setClientSecret(event.target.value)}
+          />
+        </label>
+        {error && <p className="rounded-md bg-clay/10 px-3 py-2 text-sm text-clay">{error}</p>}
+        <div className="flex gap-2">
+          <button className="rounded-md bg-moss px-3 py-1.5 text-sm font-semibold text-paper" onClick={() => void save()}>
+            Save
+          </button>
+          <button
+            className="rounded-md border border-line px-3 py-1.5 text-sm disabled:opacity-60"
+            disabled={!saved}
+            onClick={() => void send({ type: 'CLEAR_CUSTOM_OAUTH' })}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+    </details>
   );
 }
 
