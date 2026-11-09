@@ -233,8 +233,9 @@ function markAllNeedReauth(state: PersistedState): void {
 /** Messages only the extension's own pages (options, popup) may send, never a content script. */
 const PAGE_ONLY_MESSAGES = new Set<string>(['SET_CUSTOM_OAUTH', 'CLEAR_CUSTOM_OAUTH']);
 
-export function fromExtensionPage(sender: { id?: string; tab?: unknown; url?: string }): boolean {
-  if (sender.id !== browser.runtime.id || sender.tab) return false;
+/** Options opens in a tab, so sender.tab is set there; a content script's url is the web page's. */
+export function fromExtensionPage(sender: { id?: string; url?: string }): boolean {
+  if (sender.id !== browser.runtime.id) return false;
   return typeof sender.url === 'string' && sender.url.startsWith(browser.runtime.getURL('/'));
 }
 
@@ -332,6 +333,8 @@ async function handleMessage(message: ExtensionRequest): Promise<ExtensionRespon
       if (!checked.ok) return { ok: false, error: checked.error };
       const next = await enqueue(async () => {
         const state = await loadState();
+        const saved = await loadCustomOAuth();
+        if (saved?.clientId === checked.value.clientId && saved.clientSecret === checked.value.clientSecret) return state;
         await saveCustomOAuth(checked.value);
         markAllNeedReauth(state);
         await saveState(state);
@@ -342,6 +345,7 @@ async function handleMessage(message: ExtensionRequest): Promise<ExtensionRespon
     case 'CLEAR_CUSTOM_OAUTH': {
       const next = await enqueue(async () => {
         const state = await loadState();
+        if (!(await loadCustomOAuth())) return state;
         await clearCustomOAuth();
         markAllNeedReauth(state);
         await saveState(state);

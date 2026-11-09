@@ -43,7 +43,7 @@ vi.mock('wxt/browser', () => {
 const background = (await import('~/entrypoints/background')).default as unknown as () => void;
 background();
 
-const optionsPage = { id: 'ext', url: 'chrome-extension://ext/options.html' };
+const optionsPage = { id: 'ext', tab: { id: 2 }, url: 'chrome-extension://ext/options.html' };
 
 function send(
   message: unknown,
@@ -88,6 +88,21 @@ describe('SET_CUSTOM_OAUTH', () => {
     expect(response.state?.customOAuth).toEqual({ clientId: id, hasSecret: true });
   });
 
+  it('saving the same pair again keeps accounts connected', async () => {
+    await send({ type: 'SET_CUSTOM_OAUTH', clientId: id, clientSecret: 'sec' });
+    const saved = store.otpState as { accounts: { needsReauth?: boolean; refreshToken?: string }[] };
+    saved.accounts[0] = { ...saved.accounts[0], needsReauth: false, refreshToken: 'rt2' };
+    const response = await send({ type: 'SET_CUSTOM_OAUTH', clientId: id, clientSecret: 'sec' });
+    expect(response.ok).toBe(true);
+    expect((store.otpState as typeof saved).accounts[0].refreshToken).toBe('rt2');
+  });
+
+  it('CLEAR_CUSTOM_OAUTH with nothing saved keeps accounts connected', async () => {
+    const response = await send({ type: 'CLEAR_CUSTOM_OAUTH' });
+    expect(response.ok).toBe(true);
+    expect((store.otpState as { accounts: { needsReauth?: boolean }[] }).accounts[0].needsReauth).toBeUndefined();
+  });
+
   it('CLEAR_CUSTOM_OAUTH removes it and marks accounts for reconnect', async () => {
     await send({ type: 'SET_CUSTOM_OAUTH', clientId: id, clientSecret: 'sec' });
     const response = await send({ type: 'CLEAR_CUSTOM_OAUTH' });
@@ -98,7 +113,7 @@ describe('SET_CUSTOM_OAUTH', () => {
 });
 
 describe('custom client messages from a content script', () => {
-  it('are refused', async () => {
+  it('are allowed from the options page open in a tab, refused elsewhere', async () => {
     const message = { type: 'SET_CUSTOM_OAUTH', clientId: id, clientSecret: 's' };
     const fromTab = await send(message, { id: 'ext', tab: { id: 1 }, url: 'https://example.com/' });
     expect(fromTab.ok).toBe(false);

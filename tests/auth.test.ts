@@ -67,11 +67,19 @@ describe('refreshAccessToken', () => {
     await expect(refreshAccessToken({ email: 'a@gmail.com' })).resolves.toBeNull();
   });
 
-  it('treats a refresh token from another client as revoked', async () => {
+  it('treats a refresh token from another client as revoked with a custom client', async () => {
+    store.customOAuth = { clientId: 'mine.apps.googleusercontent.com', clientSecret: 'mine-secret' };
     vi.stubGlobal('fetch', async () => Response.json({ error: 'invalid_client' }, { status: 401 }));
     await expect(refreshAccessToken({ email: 'a@gmail.com', refreshToken: 'rt' })).resolves.toBeNull();
     vi.stubGlobal('fetch', async () => Response.json({ error: 'unauthorized_client' }, { status: 400 }));
     await expect(refreshAccessToken({ email: 'a@gmail.com', refreshToken: 'rt' })).resolves.toBeNull();
+  });
+
+  it('keeps accounts when the built-in client gets invalid_client', async () => {
+    vi.stubGlobal('fetch', async () => Response.json({ error: 'invalid_client' }, { status: 401 }));
+    await expect(refreshAccessToken({ email: 'a@gmail.com', refreshToken: 'rt' })).rejects.toBeInstanceOf(
+      TokenRefreshError,
+    );
   });
 
   it('refreshes with the custom pair when one is saved', async () => {
@@ -100,7 +108,7 @@ describe('resolveClient', () => {
 
   it('uses the custom pair when both fields are set', async () => {
     store.customOAuth = { clientId: 'mine', clientSecret: 'ms' };
-    expect(await resolveClient()).toEqual({ clientId: 'mine', clientSecret: 'ms' });
+    expect(await resolveClient()).toEqual({ clientId: 'mine', clientSecret: 'ms', custom: true });
   });
 
   it('uses the build-time pair when nothing is saved', async () => {

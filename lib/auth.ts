@@ -27,12 +27,14 @@ export class TokenRefreshError extends Error {
 export interface OAuthClient {
   clientId: string;
   clientSecret: string;
+  /** True for a pair the user saved in Settings. */
+  custom?: boolean;
 }
 
 /** The saved custom pair when both fields are set, else the build-time pair. */
 export async function resolveClient(): Promise<OAuthClient> {
   const customOAuth = await loadCustomOAuth();
-  if (customOAuth?.clientId && customOAuth.clientSecret) return customOAuth;
+  if (customOAuth?.clientId && customOAuth.clientSecret) return { ...customOAuth, custom: true };
   return {
     clientId: import.meta.env.WXT_GOOGLE_CLIENT_ID ?? '',
     clientSecret: import.meta.env.WXT_GOOGLE_CLIENT_SECRET ?? '',
@@ -112,8 +114,15 @@ async function silentImplicitRefresh(client: OAuthClient, email: string): Promis
   }
 }
 
-/** A refresh token from another client comes back as invalid_client or unauthorized_client. */
-const REVOKED_ERRORS = new Set(['invalid_grant', 'invalid_client', 'unauthorized_client']);
+/**
+ * invalid_grant always means the refresh token is dead. With a custom client, a token issued to
+ * another client comes back as invalid_client or unauthorized_client; with the built-in client those
+ * mean a bad build secret, so accounts are kept and the call is retried later.
+ */
+function isRevoked(client: OAuthClient, error: string | undefined): boolean {
+  if (error === 'invalid_grant') return true;
+  return Boolean(client.custom) && (error === 'invalid_client' || error === 'unauthorized_client');
+}
 
 type TokenResult =
   | { ok: true; token: string; expiresAt: number; refreshToken?: string }
@@ -143,7 +152,7 @@ async function tokenRequest(client: OAuthClient, fields: Record<string, string>)
   };
   if (!response.ok || !data.access_token) {
     const error = data.error_description || data.error || `Google token endpoint ${response.status}`;
-    return { ok: false, error, revoked: REVOKED_ERRORS.has(data.error ?? '') };
+    return { ok: false, error, revoked: isRevoked(client, data.error) };
   }
   return {
     ok: true,
