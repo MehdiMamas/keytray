@@ -6,6 +6,10 @@ The extension id is fixed to the Chrome Web Store item, so every unpacked instal
 
 You need a free Google Cloud project. No billing account. The OAuth app is published (In production) but not verified, so up to 100 people can connect and each sees an "unverified app" screen once and clicks Continue. Do not leave it in Testing: Google expires Testing-mode refresh tokens after 7 days, which forces a reconnect every week.
 
+## Use your own client without building
+
+Already have the extension installed and want to sign in with your own Google client? Follow step 1 below (Google Cloud) and skip the build. Then open Keytray's Settings, expand **Advanced: use your own Google sign-in client**, and paste the client id and secret there instead of `.env`. No rebuild is needed. The page shows the redirect URI to add to your client. Your own client falls under Google's personal-use exception, so it needs no verification or assessment. Saving or clearing it signs your connected accounts out (their codes are kept); reconnect them afterwards.
+
 ## 1. Google Cloud
 
 1. Open [Google Cloud Console](https://console.cloud.google.com/) and create a project.
@@ -94,7 +98,7 @@ Add these under Settings > Secrets and variables > Actions:
 
 Steps:
 
-1. Run `scripts/release.sh 0.5.1`. It bumps `package.json` and `package-lock.json`, commits "Release v0.5.1." and tags it. It does not push.
+1. Run `scripts/release.sh 0.5.1`. It bumps `package.json`, commits "Release v0.5.1." and tags it. It does not push.
 2. Push the commit and tag with the command it prints.
 3. The Release workflow checks the tag matches `package.json`, runs compile and tests, builds both zips, and creates a draft GitHub release with both attached (the `-chrome.zip` sideload build and the `-chrome-store.zip` store build). The Web Store upload only uploads; it does not submit for review.
 4. Review the draft release notes and publish it.
