@@ -9,6 +9,8 @@ export type ExtensionRequest =
   | { type: 'REMOVE_ACCOUNT'; email: string }
   | { type: 'SET_ACCOUNT_MODE'; email: string; mode: Mode | null }
   | { type: 'SET_SETTINGS'; settings: Partial<Settings> }
+  | { type: 'SET_CUSTOM_OAUTH'; clientId: string; clientSecret: string }
+  | { type: 'CLEAR_CUSTOM_OAUTH' }
   | { type: 'OTP_PAGE_DETECTED' }
   | { type: 'MARK_SEEN' }
   | { type: 'CLEAR_HISTORY' }

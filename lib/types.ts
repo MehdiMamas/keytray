@@ -77,6 +77,8 @@ export interface PublicState {
   lastSyncedAt: number | null;
   /** One-time unlock for more than one Gmail account. */
   paid: boolean;
+  /** The saved custom Google client. The secret itself is never sent to the UI. */
+  customOAuth?: { clientId: string; hasSecret: boolean };
 }
 
 export const DEFAULT_SETTINGS: Settings = {

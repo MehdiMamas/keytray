@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { loadCustomOAuth } from './storage';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -23,12 +24,19 @@ export class TokenRefreshError extends Error {
   }
 }
 
-export function googleClientId(): string {
-  return import.meta.env.WXT_GOOGLE_CLIENT_ID ?? '';
+export interface OAuthClient {
+  clientId: string;
+  clientSecret: string;
 }
 
-function googleClientSecret(): string {
-  return import.meta.env.WXT_GOOGLE_CLIENT_SECRET ?? '';
+/** The saved custom pair when both fields are set, else the build-time pair. */
+export async function resolveClient(): Promise<OAuthClient> {
+  const customOAuth = await loadCustomOAuth();
+  if (customOAuth?.clientId && customOAuth.clientSecret) return customOAuth;
+  return {
+    clientId: import.meta.env.WXT_GOOGLE_CLIENT_ID ?? '',
+    clientSecret: import.meta.env.WXT_GOOGLE_CLIENT_SECRET ?? '',
+  };
 }
 
 /**
@@ -36,12 +44,12 @@ function googleClientSecret(): string {
  * Uses the authorization code flow so Google returns a refresh token.
  */
 export async function signInInteractive(loginHint?: string): Promise<SignedInAccount> {
-  const clientId = googleClientId();
-  if (!clientId || !googleClientSecret()) {
-    throw new Error('Missing Google client id or secret. Add them to .env and rebuild.');
+  const client = await resolveClient();
+  if (!client.clientId || !client.clientSecret) {
+    throw new Error('Missing Google client id or secret. Add your own client under Settings, Advanced, or add them to .env and rebuild.');
   }
   const verifier = randomVerifier();
-  const responseUrl = await launch({
+  const responseUrl = await launch(client, {
     response_type: 'code',
     prompt: 'consent select_account',
     access_type: 'offline',
@@ -55,7 +63,7 @@ export async function signInInteractive(loginHint?: string): Promise<SignedInAcc
   const code = params.get('code');
   if (!code) throw new Error('Google did not return an authorization code');
 
-  const tokens = await tokenRequest({
+  const tokens = await tokenRequest(client, {
     grant_type: 'authorization_code',
     code,
     code_verifier: verifier,
@@ -74,9 +82,10 @@ export async function refreshAccessToken(account: {
   email: string;
   refreshToken?: string;
 }): Promise<{ token: string; expiresAt: number } | null> {
-  if (!googleClientId()) return null;
-  if (account.refreshToken && googleClientSecret()) {
-    const tokens = await tokenRequest({ grant_type: 'refresh_token', refresh_token: account.refreshToken });
+  const client = await resolveClient();
+  if (!client.clientId) return null;
+  if (account.refreshToken && client.clientSecret) {
+    const tokens = await tokenRequest(client, { grant_type: 'refresh_token', refresh_token: account.refreshToken });
     if (tokens.ok) return { token: tokens.token, expiresAt: tokens.expiresAt };
     if (tokens.revoked) {
       console.warn('[Gmail OTP] refresh token rejected', account.email, tokens.error);
@@ -84,13 +93,13 @@ export async function refreshAccessToken(account: {
     }
     throw new TokenRefreshError(tokens.error);
   }
-  return silentImplicitRefresh(account.email);
+  return silentImplicitRefresh(client, account.email);
 }
 
 /** Accounts connected before refresh tokens. Works only while Google's session cookie allows it. */
-async function silentImplicitRefresh(email: string): Promise<{ token: string; expiresAt: number } | null> {
+async function silentImplicitRefresh(client: OAuthClient, email: string): Promise<{ token: string; expiresAt: number } | null> {
   try {
-    const responseUrl = await launch({ response_type: 'token', prompt: 'none', login_hint: email }, false);
+    const responseUrl = await launch(client, { response_type: 'token', prompt: 'none', login_hint: email }, false);
     const params = new URLSearchParams(new URL(responseUrl).hash.replace(/^#/, ''));
     const error = params.get('error');
     if (error) throw new Error(error);
@@ -103,19 +112,22 @@ async function silentImplicitRefresh(email: string): Promise<{ token: string; ex
   }
 }
 
+/** A refresh token from another client comes back as invalid_client or unauthorized_client. */
+const REVOKED_ERRORS = new Set(['invalid_grant', 'invalid_client', 'unauthorized_client']);
+
 type TokenResult =
   | { ok: true; token: string; expiresAt: number; refreshToken?: string }
   | { ok: false; error: string; revoked: boolean };
 
-async function tokenRequest(fields: Record<string, string>): Promise<TokenResult> {
+async function tokenRequest(client: OAuthClient, fields: Record<string, string>): Promise<TokenResult> {
   let response: Response;
   try {
     response = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id: googleClientId(),
-        client_secret: googleClientSecret(),
+        client_id: client.clientId,
+        client_secret: client.clientSecret,
         ...fields,
       }),
     });
@@ -131,7 +143,7 @@ async function tokenRequest(fields: Record<string, string>): Promise<TokenResult
   };
   if (!response.ok || !data.access_token) {
     const error = data.error_description || data.error || `Google token endpoint ${response.status}`;
-    return { ok: false, error, revoked: data.error === 'invalid_grant' };
+    return { ok: false, error, revoked: REVOKED_ERRORS.has(data.error ?? '') };
   }
   return {
     ok: true,
@@ -141,9 +153,9 @@ async function tokenRequest(fields: Record<string, string>): Promise<TokenResult
   };
 }
 
-async function launch(params: Record<string, string>, interactive: boolean): Promise<string> {
+async function launch(client: OAuthClient, params: Record<string, string>, interactive: boolean): Promise<string> {
   const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-  url.searchParams.set('client_id', googleClientId());
+  url.searchParams.set('client_id', client.clientId);
   url.searchParams.set('redirect_uri', browser.identity.getRedirectURL());
   url.searchParams.set('scope', SCOPES);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);

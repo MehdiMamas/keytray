@@ -10,13 +10,17 @@ import { FREE_ACCOUNT_LIMIT, isNewAccountAllowed, UPGRADE_REQUIRED_ERROR } from 
 import { cachePaid, createExtPay, readPaid, refreshPaid } from '~/lib/billing';
 import {
   addAgentLog,
+  clearCustomOAuth,
   loadAgentUsed,
+  loadCustomOAuth,
   loadState,
   markAgentUsed,
   removeAgentUsed,
   resolveMode,
+  saveCustomOAuth,
   saveState,
   toPublicState,
+  validateCustomOAuth,
 } from '~/lib/storage';
 import {
   CODE_MAX_AGE_MS,
@@ -209,7 +213,16 @@ function enqueue<T>(job: () => Promise<T>): Promise<T> {
 }
 
 async function publish(state: PersistedState): Promise<PublicState> {
-  return toPublicState(state, await readPaid());
+  const customOAuth = await loadCustomOAuth();
+  return {
+    ...toPublicState(state, await readPaid()),
+    customOAuth: customOAuth ? { clientId: customOAuth.clientId, hasSecret: true } : undefined,
+  };
+}
+
+/** Accounts connected with another client cannot refresh. Their codes stay. */
+function markAllNeedReauth(state: PersistedState): void {
+  for (const account of state.accounts) markNeedsReauth(account);
 }
 
 async function handleMessage(message: ExtensionRequest): Promise<ExtensionResponse> {
@@ -296,6 +309,28 @@ async function handleMessage(message: ExtensionRequest): Promise<ExtensionRespon
       const next = await enqueue(async () => {
         const state = await loadState();
         state.settings = { ...state.settings, ...message.settings };
+        await saveState(state);
+        return state;
+      });
+      return { ok: true, state: await publish(next) };
+    }
+    case 'SET_CUSTOM_OAUTH': {
+      const checked = validateCustomOAuth(message);
+      if (!checked.ok) return { ok: false, error: checked.error };
+      const next = await enqueue(async () => {
+        const state = await loadState();
+        await saveCustomOAuth(checked.value);
+        markAllNeedReauth(state);
+        await saveState(state);
+        return state;
+      });
+      return { ok: true, state: await publish(next) };
+    }
+    case 'CLEAR_CUSTOM_OAUTH': {
+      const next = await enqueue(async () => {
+        const state = await loadState();
+        await clearCustomOAuth();
+        markAllNeedReauth(state);
         await saveState(state);
         return state;
       });
