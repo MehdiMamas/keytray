@@ -20,6 +20,8 @@ vi.mock('wxt/browser', () => {
           },
         },
         connectNative: () => ({ onDisconnect: event, onMessage: event, disconnect: () => {} }),
+        id: 'ext',
+        getURL: (path: string) => `chrome-extension://ext${path}`,
       },
       notifications: { onClicked: event },
       storage: {
@@ -41,9 +43,14 @@ vi.mock('wxt/browser', () => {
 const background = (await import('~/entrypoints/background')).default as unknown as () => void;
 background();
 
-function send(message: unknown): Promise<{ ok: boolean; error?: string; state?: Record<string, unknown> }> {
+const optionsPage = { id: 'ext', url: 'chrome-extension://ext/options.html' };
+
+function send(
+  message: unknown,
+  sender: unknown = optionsPage,
+): Promise<{ ok: boolean; error?: string; state?: Record<string, unknown> }> {
   return new Promise((resolve) => {
-    listener(message, {}, resolve as (response: unknown) => void);
+    listener(message, sender, resolve as (response: unknown) => void);
   });
 }
 
@@ -87,5 +94,15 @@ describe('SET_CUSTOM_OAUTH', () => {
     expect(response.ok).toBe(true);
     expect(store.customOAuth).toBeUndefined();
     expect((store.otpState as { accounts: { needsReauth?: boolean }[] }).accounts[0].needsReauth).toBe(true);
+  });
+});
+
+describe('custom client messages from a content script', () => {
+  it('are refused', async () => {
+    const message = { type: 'SET_CUSTOM_OAUTH', clientId: id, clientSecret: 's' };
+    const fromTab = await send(message, { id: 'ext', tab: { id: 1 }, url: 'https://example.com/' });
+    expect(fromTab.ok).toBe(false);
+    const fromOther = await send(message, { id: 'other', url: 'chrome-extension://other/x.html' });
+    expect(fromOther.ok).toBe(false);
   });
 });

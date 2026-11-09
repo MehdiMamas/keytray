@@ -55,8 +55,13 @@ export default defineBackground(() => {
   browser.notifications.onClicked.addListener((notificationId) => {
     void openNotifiedMessage(notificationId);
   });
-  browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    void handleMessage(message as ExtensionRequest)
+  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const request = message as ExtensionRequest;
+    if (PAGE_ONLY_MESSAGES.has(request?.type) && !fromExtensionPage(sender)) {
+      sendResponse({ ok: false, error: 'Not allowed from this context' } satisfies ExtensionResponse);
+      return false;
+    }
+    void handleMessage(request)
       .then((response) => sendResponse(response))
       .catch((error: unknown) => {
         const text = error instanceof Error ? error.message : 'Something went wrong';
@@ -223,6 +228,14 @@ async function publish(state: PersistedState): Promise<PublicState> {
 /** Accounts connected with another client cannot refresh. Their codes stay. */
 function markAllNeedReauth(state: PersistedState): void {
   for (const account of state.accounts) markNeedsReauth(account);
+}
+
+/** Messages only the extension's own pages (options, popup) may send, never a content script. */
+const PAGE_ONLY_MESSAGES = new Set<string>(['SET_CUSTOM_OAUTH', 'CLEAR_CUSTOM_OAUTH']);
+
+export function fromExtensionPage(sender: { id?: string; tab?: unknown; url?: string }): boolean {
+  if (sender.id !== browser.runtime.id || sender.tab) return false;
+  return typeof sender.url === 'string' && sender.url.startsWith(browser.runtime.getURL('/'));
 }
 
 async function handleMessage(message: ExtensionRequest): Promise<ExtensionResponse> {
