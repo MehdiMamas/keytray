@@ -180,7 +180,7 @@ jobs:
         env:
           ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
-          resp=$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $ACCESS_TOKEN" \
+          resp=$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: application/json" -d '{}' \
             "https://chromewebstore.googleapis.com/v2/publishers/$PUBLISHER_ID/items/$EXTENSION_ID:publish")
           echo "$resp"
           code=$(echo "$resp" | tail -n1)
