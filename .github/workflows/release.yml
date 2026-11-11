@@ -112,76 +112,79 @@ jobs:
   webstore:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
+      id-token: write
     env:
-      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-      CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+      GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+      CWS_SERVICE_ACCOUNT: ${{ vars.CWS_SERVICE_ACCOUNT }}
+      PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+      EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
     steps:
-      - name: Check Chrome Web Store secrets
+      - name: Check Chrome Web Store settings
         id: gate
         run: |
-          if [ -n "$CWS_CLIENT_ID" ] && [ -n "$CWS_CLIENT_SECRET" ] && [ -n "$CWS_REFRESH_TOKEN" ] && [ -n "$CWS_PUBLISHER_ID" ]; then
+          if [ -n "$GCP_WIF_PROVIDER" ] && [ -n "$CWS_SERVICE_ACCOUNT" ] && [ -n "$PUBLISHER_ID" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::CWS_CLIENT_ID, CWS_CLIENT_SECRET, CWS_REFRESH_TOKEN and the CWS_PUBLISHER_ID variable are not all set; skipping Chrome Web Store upload."
+            echo "::warning::The variables GCP_WIF_PROVIDER, CWS_SERVICE_ACCOUNT and CWS_PUBLISHER_ID are not all set; skipping Chrome Web Store upload."
           fi
       - if: steps.gate.outputs.enabled == 'true'
         uses: actions/download-artifact@v4
         with:
           name: release-zips
           path: dist-release
-      - if: steps.gate.outputs.enabled == 'true'
-        uses: actions/setup-node@v4
+      - name: Get a short-lived Google access token
+        id: auth
+        if: steps.gate.outputs.enabled == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          node-version: lts/*
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.CWS_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+          create_credentials_file: false
       - name: Upload to Chrome Web Store
         if: steps.gate.outputs.enabled == 'true'
         env:
-          EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
-          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
-          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          ZIP: dist-release/keytray-${{ needs.build.outputs.version }}-chrome-store.zip
         run: |
-          npx --yes chrome-webstore-upload-cli@4.0.2 upload \
-            --source "dist-release/keytray-${{ needs.build.outputs.version }}-chrome-store.zip" \
-            --extension-id "$EXTENSION_ID"
-      - name: Show Chrome Web Store error details
-        if: failure() && steps.gate.outputs.enabled == 'true'
-        env:
-          EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
-          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
-          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-        run: |
-          token=$(curl -s https://oauth2.googleapis.com/token \
-            -d client_id="$CLIENT_ID" -d client_secret="$CLIENT_SECRET" \
-            -d refresh_token="$REFRESH_TOKEN" -d grant_type=refresh_token | jq -r '.access_token // empty')
-          if [ -z "$token" ]; then
-            echo "::warning::Could not get an access token."
-            exit 0
+          base="https://chromewebstore.googleapis.com"
+          item="publishers/$PUBLISHER_ID/items/$EXTENSION_ID"
+          resp=$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -T "$ZIP" "$base/upload/v2/$item:upload")
+          code=$(echo "$resp" | tail -n1)
+          resp=$(echo "$resp" | sed '$d')
+          echo "$resp"
+          if [ "$code" != "200" ]; then
+            echo "::error::Upload failed (HTTP $code)"
+            exit 1
           fi
-          echo "::add-mask::$token"
-          echo "--- v2 fetchStatus ---"
-          curl -s -H "Authorization: Bearer $token" \
-            "https://chromewebstore.googleapis.com/v2/publishers/$PUBLISHER_ID/items/$EXTENSION_ID:fetchStatus" | jq .
-          echo "--- v1.1 upload ---"
-          curl -s -X PUT -H "Authorization: Bearer $token" -H "x-goog-api-version: 2" \
-            -T "dist-release/keytray-${{ needs.build.outputs.version }}-chrome-store.zip" \
-            "https://www.googleapis.com/upload/chromewebstore/v1.1/items/$EXTENSION_ID" | jq .
+          state=$(echo "$resp" | jq -r '.uploadState // empty')
+          tries=0
+          while [ "$state" = "IN_PROGRESS" ] && [ "$tries" -lt 36 ]; do
+            sleep 5
+            tries=$((tries + 1))
+            resp=$(curl -sS -H "Authorization: Bearer $ACCESS_TOKEN" "$base/v2/$item:fetchStatus")
+            echo "$resp"
+            state=$(echo "$resp" | jq -r '.lastAsyncUploadState // .uploadState // empty')
+          done
+          if [ "$state" != "SUCCESS" ]; then
+            echo "::error::Chrome Web Store upload did not succeed (state: ${state:-none})"
+            exit 1
+          fi
       - name: Publish for review
         if: steps.gate.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch' && inputs.publish
         env:
-          EXTENSION_ID: kfkmcgkbicdmgdodjjindmnpofbcmoji
-          PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
-          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
-          npx --yes chrome-webstore-upload-cli@4.0.2 publish \
-            --extension-id "$EXTENSION_ID"
+          resp=$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://chromewebstore.googleapis.com/v2/publishers/$PUBLISHER_ID/items/$EXTENSION_ID:publish")
+          echo "$resp"
+          code=$(echo "$resp" | tail -n1)
+          if [ "$code" != "200" ]; then
+            echo "::error::Publish failed (HTTP $code)"
+            exit 1
+          fi
