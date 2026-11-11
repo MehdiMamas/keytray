@@ -188,3 +188,9 @@ jobs:
             echo "::error::Publish failed (HTTP $code)"
             exit 1
           fi
+          state=$(echo "$resp" | sed '$d' | jq -r '.state // empty')
+          if [ -z "$state" ]; then
+            echo "::error::Publish response has no item state"
+            exit 1
+          fi
+          echo "::notice::Chrome Web Store item state after publish: $state"
