@@ -93,8 +93,12 @@ Email bodies are not stored. The extension keeps the code, sender, subject, and 
 Add these under Settings > Secrets and variables > Actions:
 
 - `WXT_GOOGLE_CLIENT_ID`, `WXT_GOOGLE_CLIENT_SECRET`: the same OAuth client used for local builds. Required; the release fails without them.
-- `CWS_CLIENT_ID`, `CWS_CLIENT_SECRET`, `CWS_REFRESH_TOKEN`: optional. When all three are set, the release also uploads to the Chrome Web Store. Create an OAuth client (type Desktop app) in Google Cloud with the Chrome Web Store API enabled, then follow the [chrome-webstore-upload-cli guide](https://github.com/fregante/chrome-webstore-upload-keys) to get the refresh token.
-- `CWS_PUBLISHER_ID` (a repository **variable**, not a secret): your Chrome Web Store publisher ID, shown in the developer dashboard under Account. The upload tool needs it since chrome-webstore-upload-cli 4.
+- `GCP_WIF_PROVIDER`, `CWS_SERVICE_ACCOUNT`, `CWS_PUBLISHER_ID` (repository **variables**, not secrets): optional. When all three are set, the release also uploads to the Chrome Web Store. There is no stored token: GitHub Actions trades its own identity for a short-lived Google token through Workload Identity Federation.
+  - `GCP_WIF_PROVIDER`: the full provider name, `projects/<number>/locations/global/workloadIdentityPools/github/providers/github`.
+  - `CWS_SERVICE_ACCOUNT`: the service account email (no roles needed).
+  - `CWS_PUBLISHER_ID`: your publisher ID, shown in the Chrome Web Store developer dashboard under Account.
+
+One-time setup in Google Cloud: enable the Chrome Web Store, IAM Service Account Credentials and Security Token Service APIs; create the service account; create a Workload Identity pool `github` with an OIDC provider `github` (issuer `https://token.actions.githubusercontent.com`, mapping `google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref`, condition `assertion.repository=='MehdiMamas/keytray' && (assertion.ref=='refs/heads/main' || assertion.ref.startsWith('refs/tags/v'))`, so only main and release tags can get a token; a manual Release run from any other branch fails at the Google auth step; anyone with push access can push a `v*` tag, which is accepted because only the owner has push access); grant the service account the role `roles/iam.workloadIdentityUser` for `principalSet://iam.googleapis.com/projects/<number>/locations/global/workloadIdentityPools/github/attribute.repository/MehdiMamas/keytray`. Then add the service account email in the developer dashboard under Account (one per publisher). See [Use a service account with the Chrome Web Store API](https://developer.chrome.com/docs/webstore/service-accounts).
 
 Steps:
 
