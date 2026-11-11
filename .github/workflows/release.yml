@@ -167,9 +167,9 @@ jobs:
           while { [ "$state" = "IN_PROGRESS" ] || [ "$state" = "UPLOAD_IN_PROGRESS" ]; } && [ "$tries" -lt 36 ]; do
             sleep 5
             tries=$((tries + 1))
-            resp=$(curl -sS -H "Authorization: Bearer $ACCESS_TOKEN" "$base/v2/$item:fetchStatus")
+            resp=$(curl -sS -H "Authorization: Bearer $ACCESS_TOKEN" "$base/v2/$item:fetchStatus" || true)
             echo "$resp"
-            state=$(echo "$resp" | jq -r '.lastAsyncUploadState // .uploadState // empty')
+            state=$(echo "$resp" | jq -r '.lastAsyncUploadState // .uploadState // empty' 2>/dev/null || echo IN_PROGRESS)
           done
           if [ "$state" != "SUCCEEDED" ]; then
             echo "::error::Chrome Web Store upload did not succeed (state: ${state:-none})"
@@ -193,4 +193,9 @@ jobs:
             echo "::error::Publish response has no item state"
             exit 1
           fi
+          case "$state" in
+            REJECTED|CANCELLED|ITEM_STATE_UNSPECIFIED)
+              echo "::error::Chrome Web Store refused the publish (state: $state)"
+              exit 1 ;;
+          esac
           echo "::notice::Chrome Web Store item state after publish: $state"
