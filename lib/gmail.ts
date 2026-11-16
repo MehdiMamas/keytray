@@ -32,6 +32,8 @@ export interface ParsedMessage {
   html: string;
   receivedAt: number;
   dmarc?: 'pass' | 'fail';
+  /** On a DMARC pass: the From domain Gmail evaluated (header.from). */
+  dmarcFrom?: string;
 }
 
 interface GmailHeader {
@@ -151,30 +153,44 @@ export function parseGmailMessage(raw: GmailMessage): ParsedMessage {
   const body = plain ? decodeBody(plain) : html ? htmlToText(html) : raw.snippet ?? '';
   const receivedAt = raw.internalDate ? Number(raw.internalDate) : Date.parse(header(headers, 'Date')) || Date.now();
   // The first Authentication-Results header is the one Gmail itself added.
-  const dmarc = dmarcResult(header(headers, 'Authentication-Results'));
-  return { id: raw.id, from, subject, body, html, receivedAt, ...(dmarc ? { dmarc } : {}) };
+  const { dmarc, dmarcFrom } = dmarcResult(header(headers, 'Authentication-Results'));
+  return {
+    id: raw.id,
+    from,
+    subject,
+    body,
+    html,
+    receivedAt,
+    ...(dmarc ? { dmarc } : {}),
+    ...(dmarcFrom ? { dmarcFrom } : {}),
+  };
 }
 
 /**
- * DMARC verdict from Gmail's own Authentication-Results header (RFC 8601).
- * Only a result at the start of a ';'-separated method segment counts, after
- * quoted strings and comments (which can echo sender-chosen text) are removed,
- * and only when the header was added by mx.google.com. Anything else: undefined.
+ * DMARC verdict from Gmail's own Authentication-Results header (RFC 8601),
+ * plus, on a pass, the header.from domain Gmail evaluated. Only a result at the
+ * start of a ';'-separated method segment counts, after quoted strings and
+ * comments (which can echo sender-chosen text) are removed, and only when the
+ * header was added by mx.google.com. Anything unusual gives no verdict.
  */
-export function dmarcResult(value: string): 'pass' | 'fail' | undefined {
-  let text = value.toLowerCase().replace(/"(?:[^"\\]|\\.)*"/g, ' ');
+export function dmarcResult(value: string): { dmarc?: 'pass' | 'fail'; dmarcFrom?: string } {
+  let text = value.toLowerCase();
+  if (text.includes('\\')) return {};
+  text = text.replace(/"[^"]*"/g, ' ');
   for (let prev = ''; prev !== text; ) {
     prev = text;
     text = text.replace(/\([^()]*\)/g, ' ');
   }
-  if (/["()]/.test(text)) return undefined;
+  if (/["()]/.test(text)) return {};
   const [authserv, ...methods] = text.split(';').map((s) => s.trim());
-  if (authserv !== 'mx.google.com') return undefined;
+  if (authserv !== 'mx.google.com') return {};
   const dmarcs = methods.filter((m) => /^dmarc\s*=/.test(m));
-  if (dmarcs.some((m) => /^dmarc\s*=\s*fail\b/.test(m))) return 'fail';
+  if (dmarcs.some((m) => /^dmarc\s*=\s*fail\b/.test(m))) return { dmarc: 'fail' };
   // A pass segment holds nothing but the result and header.from=<plain domain>.
-  const strict = /^dmarc\s*=\s*pass(\s+header\.from\s*=\s*[a-z0-9.-]+)?$/;
-  return dmarcs.length > 0 && dmarcs.every((m) => strict.test(m)) ? 'pass' : undefined;
+  const strict = /^dmarc\s*=\s*pass\s+header\.from\s*=\s*([a-z0-9.-]+)$/;
+  const domains = dmarcs.map((m) => strict.exec(m)?.[1]);
+  if (domains.length !== 1 || !domains[0]) return {};
+  return { dmarc: 'pass', dmarcFrom: domains[0] };
 }
 
 function header(headers: GmailHeader[], name: string): string {

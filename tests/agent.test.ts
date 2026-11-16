@@ -91,6 +91,8 @@ function entry(over: Partial<CodeEntry> = {}): CodeEntry {
     receivedAt: NOW - 30_000,
     kind: 'code',
     dmarc: 'pass',
+    // Gmail's header.from: by default the From domain, as in real mail.
+    dmarcFrom: (over.from ?? 'noreply@github.com').split('@').pop()!.replace(/[>\s]/g, '').toLowerCase(),
     ...over,
   };
 }
@@ -351,10 +353,23 @@ describe('siteOf and senderDomain', () => {
   it('fails closed', () => {
     for (const v of ['', 'vercel.app', 'com', 'a b', '%%%', 'localhost', '127.0.0.1']) expect(siteOf(v)).toBe('');
   });
-  it('reads the domain after the last @ inside the last <...>', () => {
+  it('reads the domain of the one address in the From header', () => {
     expect(senderDomain('GitHub <noreply@github.com>')).toBe('github.com');
     expect(senderDomain('"noreply@github.com" <x@evil.com>')).toBe('evil.com');
-    expect(senderDomain('a@b@Example.org')).toBe('example.org');
+    expect(senderDomain('a@b@Example.org')).toBe('');
+    expect(senderDomain('A@Example.ORG')).toBe('example.org');
+    for (const odd of [
+      '(c).x@attacker.test""v@victim.test',
+      'a@vic­tim.test',
+      'a@victim。test',
+      'a@ｖictim.test',
+      '<@route:a@victim.test>',
+      'grp: a@victim.test;',
+      '"a\\"b" <a@victim.test>',
+      '(\\) <a@x.test>) <b@victim.test>',
+    ]) {
+      expect(senderDomain(odd)).toBe('');
+    }
     expect(senderDomain('  a@example.org ')).toBe('example.org');
     expect(senderDomain('no address')).toBe('');
     expect(senderDomain('a@')).toBe('');
@@ -380,6 +395,11 @@ describe('siteOf and senderDomain', () => {
     expect(entrySite(entry({ from: 'a@example.org' }))).toBe('example.org');
     expect(entrySite(entry({ from: 'a@example.org', dmarc: undefined }))).toBe('');
     expect(entrySite(entry({ from: 'a@example.org', dmarc: 'fail' }))).toBe('');
+  });
+  it('entrySite needs the domain Gmail evaluated to be on the same site', () => {
+    expect(entrySite(entry({ from: 'a@mail.example.org', dmarcFrom: 'example.org' }))).toBe('example.org');
+    expect(entrySite(entry({ from: 'a@example.org', dmarcFrom: 'attacker.test' }))).toBe('');
+    expect(entrySite(entry({ from: 'a@example.org', dmarcFrom: undefined }))).toBe('');
   });
   it('urlSite requires https', () => {
     expect(urlSite('http://example.org')).toBe('');

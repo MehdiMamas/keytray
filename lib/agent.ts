@@ -95,35 +95,32 @@ export function siteOf(host: string): string {
  * are removed first; more than one address, or anything unbalanced, gives ''.
  */
 export function senderDomain(from: string): string {
-  let text = from.replace(/"(?:[^"\\]|\\.)*"/g, ' ');
+  // Escapes are rare in real From headers and parse differently between tools.
+  if (from.includes('\\')) return '';
+  let text = from.replace(/"[^"]*"/g, ' ');
   for (let prev = ''; prev !== text; ) {
     prev = text;
     text = text.replace(/\([^()]*\)/g, ' ');
   }
-  if (/["(),;]/.test(text)) return '';
+  if (/["(),;:]/.test(text)) return '';
   const brackets = [...text.matchAll(/<([^<>]*)>/g)];
-  if (brackets.length > 1 || (brackets.length === 0 && /[<>]/.test(text))) return '';
+  if (brackets.length > 1) return '';
   const addr = (brackets.length ? brackets[0][1] : text).trim();
-  const at = addr.lastIndexOf('@');
-  if (at < 0) return '';
-  const domain = addr.slice(at + 1).replace(/[>\s]+$/, '');
-  // A plain domain only: no path, port, query, fragment or other URL parts.
-  if (!domain || /[\/\\?#:@%\[\]\s]/.test(domain)) return '';
-  try {
-    const host = new URL('https://' + domain).hostname;
-    return /^[a-z0-9.-]+$/.test(host) ? host : '';
-  } catch {
-    return '';
-  }
+  if (!brackets.length && /[<>]/.test(addr)) return '';
+  // One local part, one '@', and a plain ASCII domain (punycode for IDN).
+  const m = /^[^\s@<>]+@([A-Za-z0-9.-]+)$/.exec(addr);
+  return m ? m[1].toLowerCase() : '';
 }
 
 /**
  * Site of the entry's sender; empty unless the mail passed DMARC (Gmail's own
- * result) and the sender domain is plain. Fails closed.
+ * result) and the domain Gmail evaluated is on the same site as the From
+ * address read here. Fails closed.
  */
 export function entrySite(e: CodeEntry): string {
-  if (e.dmarc !== 'pass') return '';
-  return siteOf(senderDomain(e.from));
+  if (e.dmarc !== 'pass' || !e.dmarcFrom) return '';
+  const site = siteOf(senderDomain(e.from));
+  return site && siteOf(e.dmarcFrom) === site ? site : '';
 }
 
 /** Site of an https URL; empty for anything else. */

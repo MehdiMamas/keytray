@@ -557,6 +557,7 @@ async function pollOne(state: PersistedState, account: Account): Promise<CodeEnt
       kind: code ? 'code' : 'link',
       ...(link ? { url: link.url } : {}),
       ...(message.dmarc ? { dmarc: message.dmarc } : {}),
+      ...(message.dmarcFrom ? { dmarcFrom: message.dmarcFrom } : {}),
     });
   }
   return found;
