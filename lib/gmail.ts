@@ -151,9 +151,28 @@ export function parseGmailMessage(raw: GmailMessage): ParsedMessage {
   const body = plain ? decodeBody(plain) : html ? htmlToText(html) : raw.snippet ?? '';
   const receivedAt = raw.internalDate ? Number(raw.internalDate) : Date.parse(header(headers, 'Date')) || Date.now();
   // The first Authentication-Results header is the one Gmail itself added.
-  const auth = header(headers, 'Authentication-Results').toLowerCase();
-  const dmarc = /\bdmarc=fail\b/.test(auth) ? 'fail' : /\bdmarc=pass\b/.test(auth) ? 'pass' : undefined;
+  const dmarc = dmarcResult(header(headers, 'Authentication-Results'));
   return { id: raw.id, from, subject, body, html, receivedAt, ...(dmarc ? { dmarc } : {}) };
+}
+
+/**
+ * DMARC verdict from Gmail's own Authentication-Results header (RFC 8601).
+ * Only a result at the start of a ';'-separated method segment counts, after
+ * quoted strings and comments (which can echo sender-chosen text) are removed,
+ * and only when the header was added by mx.google.com. Anything else: undefined.
+ */
+export function dmarcResult(value: string): 'pass' | 'fail' | undefined {
+  let text = value.toLowerCase().replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  for (let prev = ''; prev !== text; ) {
+    prev = text;
+    text = text.replace(/\([^()]*\)/g, ' ');
+  }
+  if (/["()]/.test(text)) return undefined;
+  const [authserv, ...methods] = text.split(';').map((s) => s.trim());
+  if (authserv.split(/\s+/)[0] !== 'mx.google.com') return undefined;
+  const results = methods.map((m) => /^dmarc\s*=\s*([a-z]+)\b/.exec(m)?.[1]).filter(Boolean);
+  if (results.includes('fail')) return 'fail';
+  return results.length > 0 && results.every((r) => r === 'pass') ? 'pass' : undefined;
 }
 
 function header(headers: GmailHeader[], name: string): string {
