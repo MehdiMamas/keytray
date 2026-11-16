@@ -153,7 +153,9 @@ export function parseGmailMessage(raw: GmailMessage): ParsedMessage {
   const body = plain ? decodeBody(plain) : html ? htmlToText(html) : raw.snippet ?? '';
   const receivedAt = raw.internalDate ? Number(raw.internalDate) : Date.parse(header(headers, 'Date')) || Date.now();
   // The first Authentication-Results header is the one Gmail itself added.
-  const { dmarc, dmarcFrom } = dmarcResult(header(headers, 'Authentication-Results'));
+  // With more than one From header it is unclear which one DMARC evaluated: no verdict.
+  const fromCount = headers.filter((h) => h.name.toLowerCase() === 'from').length;
+  const { dmarc, dmarcFrom } = fromCount === 1 ? dmarcResult(header(headers, 'Authentication-Results')) : {};
   return {
     id: raw.id,
     from,

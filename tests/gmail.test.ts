@@ -27,7 +27,7 @@ describe('gmail parsing', () => {
       parseGmailMessage({
         id: 'd',
         payload: {
-          headers: values.map((value) => ({ name: 'Authentication-Results', value })),
+          headers: [{ name: 'From', value: 'a@a.com' }, ...values.map((value) => ({ name: 'Authentication-Results', value }))],
           mimeType: 'text/plain',
           body: { data: encode('x') },
         },
@@ -35,6 +35,23 @@ describe('gmail parsing', () => {
     expect(mk(['mx.google.com; dmarc=pass (p=NONE) header.from=a.com', 'x; dmarc=fail'])).toBe('pass');
     expect(mk(['mx.google.com; spf=pass; dmarc=fail (p=REJECT)'])).toBe('fail');
     expect(mk(['mx.google.com; spf=pass'])).toBeUndefined();
+  });
+
+  it('gives no DMARC verdict when the message has two From headers', () => {
+    const msg = parseGmailMessage({
+      id: 'd2',
+      payload: {
+        headers: [
+          { name: 'From', value: 'a@a.com' },
+          { name: 'From', value: 'b@b.com' },
+          { name: 'Authentication-Results', value: 'mx.google.com; dmarc=pass header.from=a.com' },
+        ],
+        mimeType: 'text/plain',
+        body: { data: encode('x') },
+      },
+    });
+    expect(msg.dmarc).toBeUndefined();
+    expect(msg.dmarcFrom).toBeUndefined();
   });
 
   it('keeps the header.from domain Gmail evaluated, and needs exactly one', () => {
