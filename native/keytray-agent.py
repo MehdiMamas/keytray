@@ -70,6 +70,38 @@ def socket_path():
     return os.path.join(base, "agent.sock")
 
 
+def config_dir():
+    override = os.environ.get("KEYTRAY_APPDIR")
+    if override:
+        return override
+    if WINDOWS:
+        return appdir()
+    if sys.platform == "darwin":
+        return os.path.expanduser("~/Library/Application Support/Keytray")
+    return os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "Keytray")
+
+
+CONFIG_MAX = 4096
+
+
+def read_config():
+    """The per-machine config.json: only the booleans agentSignIn and allowAll count.
+
+    Returns None when the file is missing, too big, unparsable or not an object. Never raises.
+    """
+    try:
+        with open(os.path.join(config_dir(), "config.json"), "rb") as f:
+            data = f.read(CONFIG_MAX + 1)
+        if len(data) > CONFIG_MAX:
+            return None
+        parsed = json.loads(data.decode("utf-8-sig"))
+        if not isinstance(parsed, dict):
+            return None
+        return {k: parsed[k] for k in ("agentSignIn", "allowAll") if isinstance(parsed.get(k), bool)}
+    except Exception:
+        return None
+
+
 out_lock = threading.Lock()
 pending = {}  # id -> {"event": Event, "reply": dict | None}
 pending_lock = threading.Lock()
@@ -211,6 +243,9 @@ def main():
             try:
                 message = json.loads(body.decode("utf-8"))
             except ValueError:
+                continue
+            if isinstance(message, dict) and message.get("kind") == "getConfig":
+                send_to_extension({"kind": "config", "config": read_config()})
                 continue
             with pending_lock:
                 slot = pending.get(message.get("id")) if isinstance(message, dict) else None

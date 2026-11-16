@@ -4,6 +4,7 @@ import {
   LOG_MAX,
   RateLimiter,
   appendLog,
+  applyFileConfig,
   isAllowedUrl,
   normalizeAllowlist,
   runAgentCommand,
@@ -360,5 +361,45 @@ describe('siteOf and senderDomain', () => {
     expect(urlSite('http://example.org')).toBe('');
     expect(urlSite('https://a.example.org/x')).toBe('example.org');
     expect(urlSite('junk')).toBe('');
+  });
+});
+
+describe('applyFileConfig', () => {
+  const base = { agentEnabled: false, agentAllowlist: ['github.com'], agentConfigFromFile: false, agentOffByUser: false };
+
+  it('changes nothing without a file or without agentSignIn', () => {
+    expect(applyFileConfig(base, null)).toBeNull();
+    expect(applyFileConfig(base, {})).toBeNull();
+    expect(applyFileConfig(base, { agentSignIn: false, allowAll: true })).toBeNull();
+  });
+
+  it('turns the agent on and marks it as from the file', () => {
+    expect(applyFileConfig(base, { agentSignIn: true })).toEqual({ agentEnabled: true, agentConfigFromFile: true });
+  });
+
+  it('adds * once when allowAll is true, never removes it', () => {
+    expect(applyFileConfig(base, { agentSignIn: true, allowAll: true })).toEqual({
+      agentEnabled: true,
+      agentConfigFromFile: true,
+      agentAllowlist: ['github.com', '*'],
+    });
+    const on = { ...base, agentEnabled: true, agentConfigFromFile: true, agentAllowlist: ['github.com', '*'] };
+    expect(applyFileConfig(on, { agentSignIn: true, allowAll: true })).toBeNull();
+    expect(applyFileConfig(on, { agentSignIn: true, allowAll: false })).toBeNull();
+  });
+
+  it('lets the Options off switch win', () => {
+    expect(applyFileConfig({ ...base, agentOffByUser: true }, { agentSignIn: true, allowAll: true })).toBeNull();
+  });
+
+  it('clears the from-file flag when the file goes away, leaving agentEnabled', () => {
+    const on = { ...base, agentEnabled: true, agentConfigFromFile: true };
+    expect(applyFileConfig(on, null)).toEqual({ agentConfigFromFile: false });
+    expect(applyFileConfig(on, { agentSignIn: false })).toEqual({ agentConfigFromFile: false });
+  });
+
+  it('returns null when nothing would change', () => {
+    const on = { ...base, agentEnabled: true, agentConfigFromFile: true };
+    expect(applyFileConfig(on, { agentSignIn: true })).toBeNull();
   });
 });

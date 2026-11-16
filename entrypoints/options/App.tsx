@@ -73,7 +73,7 @@ export function App() {
 
   const toggleAgent = async (on: boolean) => {
     setError('');
-    await updateSettings({ agentEnabled: on });
+    await updateSettings({ agentEnabled: on, agentOffByUser: !on, agentConfigFromFile: false });
   };
 
   const saveAllowlist = async (text: string) => {
@@ -274,6 +274,9 @@ export function App() {
           checked={state.settings.agentEnabled}
           onChange={(on) => void toggleAgent(on)}
         />
+        {state.settings.agentConfigFromFile && (
+          <p className="text-xs text-ink/60">Set by this computer's Keytray config file.</p>
+        )}
         <label className="block text-sm">
           Allowed sites (one per line, subdomains included)
           <textarea

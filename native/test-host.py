@@ -3,17 +3,21 @@
 
 Works on Unix (socket) and Windows (named pipe + key file). Exits non-zero on any failure.
 """
-import json, os, shutil, struct, subprocess, sys, tempfile, threading, time, uuid
+import json, os, queue, shutil, struct, subprocess, sys, tempfile, threading, time, uuid
 
 here = os.path.dirname(os.path.abspath(__file__))
 windows = os.name == "nt"
 tmp = tempfile.mkdtemp()
 env = dict(os.environ, KEYTRAY_NO_WSL_REEXEC="1")
+cfgfile = os.path.join(tmp, "cfg", "config.json")
+os.makedirs(os.path.dirname(cfgfile))
+env["KEYTRAY_APPDIR"] = os.path.dirname(cfgfile)
 if windows:
     appdir = os.path.join(tmp, "Keytray")
     pipe = r"\\.\pipe\keytray-test-" + uuid.uuid4().hex
     env.update(KEYTRAY_APPDIR=appdir, KEYTRAY_AGENT_PIPE=pipe)
     os.makedirs(appdir)
+    cfgfile = os.path.join(appdir, "config.json")
     keyfile = os.path.join(appdir, "agent.key")
     with open(keyfile, "wb") as f:
         f.write(b"short")  # a wrong-sized key must be replaced
@@ -35,12 +39,28 @@ host = subprocess.Popen([sys.executable, os.path.join(here, "keytray-agent.py")]
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env)
 
 
+config_replies = queue.Queue()
+
+
+def ask_config():
+    raw = json.dumps({"kind": "getConfig"}).encode()
+    host.stdin.write(struct.pack("<I", len(raw)) + raw)
+    host.stdin.flush()
+    try:
+        return config_replies.get(timeout=10)
+    except queue.Empty:
+        return "timeout"
+
+
 def fake_extension():
     while True:
         h = host.stdout.read(4)
         if len(h) < 4:
             return
         msg = json.loads(host.stdout.read(struct.unpack("<I", h)[0]))
+        if msg.get("kind") == "config":
+            config_replies.put(msg)
+            continue
         reply = {"id": msg["id"], "ok": True, "echo": msg["command"], "args": msg["args"]}
         raw = json.dumps(reply).encode()
         host.stdin.write(struct.pack("<I", len(raw)) + raw)
@@ -80,6 +100,27 @@ try:
     bad = run(["fill_code", "x"])
     print("bad args", bad.returncode, bad.stdout.strip())
     check(bad.returncode != 0, "bad args accepted")
+
+    def cfg_case(content, want, what):
+        if content is None:
+            if os.path.exists(cfgfile):
+                os.remove(cfgfile)
+        else:
+            with open(cfgfile, "wb") as f:
+                f.write(content)
+        got = ask_config()
+        check(got == {"kind": "config", "config": want}, "getConfig %s: got %r" % (what, got))
+
+    cfg_case(None, None, "no file")
+    cfg_case(b'{"agentSignIn": true, "allowAll": true}', {"agentSignIn": True, "allowAll": True}, "valid")
+    cfg_case(b'{"agentSignIn": true}', {"agentSignIn": True}, "one key")
+    cfg_case(b'{"agentSignIn": true, "allowAll": false, "sites": ["a.com"], "x": 1}',
+             {"agentSignIn": True, "allowAll": False}, "extra keys ignored")
+    cfg_case(b'{"agentSignIn": "yes", "allowAll": 1}', {}, "non-boolean values")
+    cfg_case(b'{not json', None, "unparsable")
+    cfg_case(b'[true]', None, "not an object")
+    cfg_case(b'{"agentSignIn": true, "pad": "' + b"x" * 5000 + b'"}', None, "too big")
+    check(run(["status"]).returncode == 0, "host stopped answering after config requests")
 
     if windows:
         from multiprocessing import AuthenticationError

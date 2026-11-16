@@ -5,7 +5,7 @@
  * is unit-testable.
  */
 import { getDomain } from 'tldts';
-import { CODE_MAX_AGE_MS, type CodeEntry } from './types';
+import { CODE_MAX_AGE_MS, type CodeEntry, type Settings } from './types';
 
 export const DEFAULT_AGENT_ALLOWLIST = ['github.com', 'google.com', 'vercel.com', 'apple.com'];
 /** Allowlist entry meaning every https site. */
@@ -119,6 +119,35 @@ export function urlSite(url: string): string {
   } catch {
     return '';
   }
+}
+
+/** What the helper reads from the per-machine config.json. Never a site list. */
+export interface AgentFileConfig {
+  agentSignIn?: boolean;
+  allowAll?: boolean;
+}
+
+/**
+ * Settings changes implied by the computer's config file, or null for no change.
+ * The Options off switch (agentOffByUser) always wins. A missing file or a file
+ * without agentSignIn:true only clears the from-file flag; it never switches
+ * anything off and never removes a site.
+ */
+export function applyFileConfig(
+  settings: Pick<Settings, 'agentEnabled' | 'agentAllowlist' | 'agentConfigFromFile' | 'agentOffByUser'>,
+  config: AgentFileConfig | null | undefined,
+): Partial<Settings> | null {
+  if (!config || config.agentSignIn !== true) {
+    return settings.agentConfigFromFile ? { agentConfigFromFile: false } : null;
+  }
+  if (settings.agentOffByUser === true) return null;
+  const patch: Partial<Settings> = {};
+  if (!settings.agentEnabled) patch.agentEnabled = true;
+  if (!settings.agentConfigFromFile) patch.agentConfigFromFile = true;
+  if (config.allowAll === true && !settings.agentAllowlist.includes(ALL_SITES)) {
+    patch.agentAllowlist = [...settings.agentAllowlist, ALL_SITES];
+  }
+  return Object.keys(patch).length ? patch : null;
 }
 
 export class RateLimiter {

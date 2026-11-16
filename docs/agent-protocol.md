@@ -84,3 +84,19 @@ From the client side (no reply at all):
 ## All sites
 
 With `*` in the allowlist, listed sites work as before. A site that is not in the list only gets codes and links mailed from that same site (its registrable domain), and mail that failed Gmail's DMARC check is ignored for it. `pending` follows the same rule, and the tab is checked again just before each fill or open.
+
+## Config file
+
+The computer's owner can turn on Agent sign-in without clicking in Options. The helper reads `config.json` from its app folder (Windows `%LOCALAPPDATA%\Keytray\config.json`, macOS `~/Library/Application Support/Keytray/config.json`, Linux `${XDG_DATA_HOME:-~/.local/share}/Keytray/config.json`):
+
+```json
+{"agentSignIn": true, "allowAll": true}
+```
+
+- Only these two keys count, and only as real booleans. Any other key is ignored, and a non-boolean value counts as absent. The file is read up to 4096 bytes.
+- There is no site list on purpose: a list would bypass the sender-site check that `*` keeps. `allowAll: true` only adds `*` to the allowlist; `false` never removes anything.
+- The extension asks the helper with `{"kind": "getConfig"}` over the native port and gets `{"kind": "config", "config": {...} | null}`. This is the only way it is read; messages from web pages or other extensions never set it.
+- With Agent sign-in off, the extension asks once at start (5 s, no retries) when the user has not switched it off in Options. If the file says on, Agent sign-in turns on and Options shows "Set by this computer's Keytray config file."
+- The Options off switch always wins: once the user turns Agent sign-in off, the file cannot turn it on again until the user turns it on.
+- Any program running as the same user can write this file. That is the same trust level as the helper and its socket or pipe.
+- `native/install.sh --enable` or `--allow-all` (Windows: `-Enable`, `-AllowAll`) writes the file; without a flag the installers never create or change it. Uninstall keeps `config.json`.
