@@ -97,17 +97,22 @@ export function senderDomain(from: string): string {
   const at = addr.lastIndexOf('@');
   if (at < 0) return '';
   const domain = addr.slice(at + 1).replace(/[>\s]+$/, '');
-  if (!domain) return '';
+  // A plain domain only: no path, port, query, fragment or other URL parts.
+  if (!domain || /[\/\\?#:@%\[\]\s]/.test(domain)) return '';
   try {
-    return new URL('https://' + domain).hostname;
+    const host = new URL('https://' + domain).hostname;
+    return /^[a-z0-9.-]+$/.test(host) ? host : '';
   } catch {
     return '';
   }
 }
 
-/** Site of the entry's sender; empty when unknown or when the mail failed DMARC. */
+/**
+ * Site of the entry's sender; empty unless the mail passed DMARC (Gmail's own
+ * result) and the sender domain is plain. Fails closed.
+ */
 export function entrySite(e: CodeEntry): string {
-  if (e.dmarc === 'fail') return '';
+  if (e.dmarc !== 'pass') return '';
   return siteOf(senderDomain(e.from));
 }
 

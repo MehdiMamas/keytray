@@ -9,6 +9,7 @@ import {
   normalizeAllowlist,
   runAgentCommand,
   senderDomain,
+  entrySite,
   siteOf,
   urlSite,
   sanitizeReply,
@@ -89,6 +90,7 @@ function entry(over: Partial<CodeEntry> = {}): CodeEntry {
     subject: 's',
     receivedAt: NOW - 30_000,
     kind: 'code',
+    dmarc: 'pass',
     ...over,
   };
 }
@@ -356,6 +358,14 @@ describe('siteOf and senderDomain', () => {
     expect(senderDomain('  a@example.org ')).toBe('example.org');
     expect(senderDomain('no address')).toBe('');
     expect(senderDomain('a@')).toBe('');
+    for (const odd of ['x@good.com/y', 'x@good.com#x', 'x@good.com:80', 'x@good.com?x', 'x@good.com\\y', 'x@go%6fd.com']) {
+      expect(senderDomain(odd)).toBe('');
+    }
+  });
+  it('entrySite needs a DMARC pass', () => {
+    expect(entrySite(entry({ from: 'a@example.org' }))).toBe('example.org');
+    expect(entrySite(entry({ from: 'a@example.org', dmarc: undefined }))).toBe('');
+    expect(entrySite(entry({ from: 'a@example.org', dmarc: 'fail' }))).toBe('');
   });
   it('urlSite requires https', () => {
     expect(urlSite('http://example.org')).toBe('');

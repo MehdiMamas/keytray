@@ -83,7 +83,7 @@ From the client side (no reply at all):
 
 ## All sites
 
-With `*` in the allowlist, listed sites work as before. A site that is not in the list only gets codes and links mailed from that same site (its registrable domain), and mail that failed Gmail's DMARC check is ignored for it. `pending` follows the same rule, and the tab is checked again just before each fill or open.
+With `*` in the allowlist, listed sites work as before. A site that is not in the list only gets codes and links mailed from that same site (its registrable domain), and only mail that passed Gmail's DMARC check counts for it (a failed or missing result is ignored). `pending` follows the same rule, and the tab is checked again just before each fill or open.
 
 ## Config file
 
