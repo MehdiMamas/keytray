@@ -162,17 +162,19 @@ export function parseGmailMessage(raw: GmailMessage): ParsedMessage {
  * and only when the header was added by mx.google.com. Anything else: undefined.
  */
 export function dmarcResult(value: string): 'pass' | 'fail' | undefined {
-  let text = value.toLowerCase().replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  let text = value.toLowerCase().replace(/"(?:[^"\\]|\\.)*"/g, ' ');
   for (let prev = ''; prev !== text; ) {
     prev = text;
     text = text.replace(/\([^()]*\)/g, ' ');
   }
   if (/["()]/.test(text)) return undefined;
   const [authserv, ...methods] = text.split(';').map((s) => s.trim());
-  if (authserv.split(/\s+/)[0] !== 'mx.google.com') return undefined;
-  const results = methods.map((m) => /^dmarc\s*=\s*([a-z]+)\b/.exec(m)?.[1]).filter(Boolean);
-  if (results.includes('fail')) return 'fail';
-  return results.length > 0 && results.every((r) => r === 'pass') ? 'pass' : undefined;
+  if (authserv !== 'mx.google.com') return undefined;
+  const dmarcs = methods.filter((m) => /^dmarc\s*=/.test(m));
+  if (dmarcs.some((m) => /^dmarc\s*=\s*fail\b/.test(m))) return 'fail';
+  // A pass segment holds nothing but the result and header.from=<plain domain>.
+  const strict = /^dmarc\s*=\s*pass(\s+header\.from\s*=\s*[a-z0-9.-]+)?$/;
+  return dmarcs.length > 0 && dmarcs.every((m) => strict.test(m)) ? 'pass' : undefined;
 }
 
 function header(headers: GmailHeader[], name: string): string {

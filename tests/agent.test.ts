@@ -358,6 +358,20 @@ describe('siteOf and senderDomain', () => {
     expect(senderDomain('  a@example.org ')).toBe('example.org');
     expect(senderDomain('no address')).toBe('');
     expect(senderDomain('a@')).toBe('');
+    // An address inside a comment is not the sender.
+    expect(senderDomain('"X" <a@evil.test> (note <b@good.com>)')).toBe('evil.test');
+    expect(senderDomain('<a@evil.test> (<b@good.com>)')).toBe('evil.test');
+    for (const odd of [
+      'A <a@evil.test>, B <b@good.com>',
+      'a@evil.test, b@good.com',
+      '<a@evil.test> <b@good.com>',
+      'X <a@evil.test',
+      '"unclosed <a@good.com>',
+    ]) {
+      expect(senderDomain(odd)).toBe('');
+    }
+    expect(senderDomain('"GitHub, Inc." <noreply@github.com>')).toBe('github.com');
+    expect(senderDomain('GitHub (bot) <noreply@github.com>')).toBe('github.com');
     for (const odd of ['x@good.com/y', 'x@good.com#x', 'x@good.com:80', 'x@good.com?x', 'x@good.com\\y', 'x@go%6fd.com']) {
       expect(senderDomain(odd)).toBe('');
     }

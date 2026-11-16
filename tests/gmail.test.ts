@@ -50,6 +50,8 @@ describe('gmail parsing', () => {
     expect(dmarcResult('')).toBeUndefined();
     expect(dmarcResult('mx.google.com; dmarc=fail (p=REJECT) header.from=a.com')).toBe('fail');
     expect(dmarcResult('mx.google.com; dmarc=none header.from=a.com')).toBeUndefined();
+    expect(dmarcResult('mx.google.com; spf=pass smtp.mailfrom=a;dmarc=pass@e.test')).toBeUndefined();
+    expect(dmarcResult('mx.google.com 1; dmarc=pass header.from=a.com')).toBeUndefined();
   });
 
   it('keeps the html part when a plain part is also present', () => {
