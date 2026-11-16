@@ -93,6 +93,10 @@ def read_config():
         path = os.path.join(config_dir(), "config.json")
         if os.path.islink(path) or not os.path.isfile(path):
             return None
+        if not WINDOWS:
+            info = os.stat(path)
+            if info.st_uid != os.getuid() or info.st_mode & 0o022:
+                return None
         with open(path, "rb") as f:
             data = f.read(CONFIG_MAX + 1)
         if len(data) > CONFIG_MAX:

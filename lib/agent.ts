@@ -161,7 +161,8 @@ export function applyFileConfig(
     if (settings.agentConfigFromFile) patch.agentConfigFromFile = false;
   } else if (!settings.agentOffByUser) {
     if (!settings.agentEnabled) patch.agentEnabled = true;
-    if (!settings.agentConfigFromFile) patch.agentConfigFromFile = true;
+    // Claim it only when the file itself turned the agent on.
+    if (!settings.agentEnabled && !settings.agentConfigFromFile) patch.agentConfigFromFile = true;
     if (
       wantAll &&
       !settings.agentAllowAllFromFile &&

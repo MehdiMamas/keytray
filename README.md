@@ -34,8 +34,8 @@ Set up:
 
 1. Run `native/install.sh`. It registers a small helper (`com.keytray.agent`) with Chrome, Edge and Brave. Python 3 is required.
    On Windows run `powershell -ExecutionPolicy Bypass -File native\windows\install.ps1` instead (Chrome and Edge). The CLI is then `%LOCALAPPDATA%\Keytray\keytray.cmd`. In WSL, the repo's `native/keytray-agent-cli.py` works after the Windows install: it hands the call to the Windows helper.
-2. Open Keytray Options, go to "Agent sign-in" and turn it on. Chrome asks for the native messaging permission.
-   Or skip the click: run the installer with `--enable` (Windows `-Enable`), or `--allow-all` (`-AllowAll`) to also allow all sites. This writes a per-machine `config.json` (`{"agentSignIn": true, "allowAll": true}`) in the helper's folder; Keytray reads it when it starts. It has only those two switches and no site list on purpose. The off switch in Options always wins; `agentSignIn` false or missing never turns it off by itself; deleting the file or setting `allowAll` to false removes the `*` the file added on the next browser start, and any program running as your user can write that file (same trust as the helper itself). Details: `docs/agent-protocol.md`. Uninstall keeps the file.
+2. Open Keytray Options, go to "Agent sign-in" and turn it on.
+   Or skip the click: run the installer with `--enable` (Windows `-Enable`), or `--allow-all` (`-AllowAll`) to also allow all sites. This writes a per-machine `config.json` (`{"agentSignIn": true, "allowAll": true}`) in the helper's folder; Keytray reads it when it starts. It has only those two switches and no site list on purpose. The off switch in Options always wins; `agentSignIn` false or missing never turns it off by itself; deleting the file or setting `allowAll` to false removes the `*` the file added on the next browser start, and any program running as your user can write that file, and so can turn Agent sign-in on and allow all sites; switching Agent sign-in off in Options blocks that. Details: `docs/agent-protocol.md`. Uninstall keeps the file.
 3. Use the CLI:
 
 ```

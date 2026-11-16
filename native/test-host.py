@@ -120,6 +120,12 @@ try:
     cfg_case(b'{not json', None, "unparsable")
     cfg_case(b'[true]', None, "not an object")
     cfg_case(b'{"agentSignIn": true, "pad": "' + b"x" * 5000 + b'"}', None, "too big")
+    if not windows:
+        cfg_case(b'{"agentSignIn": true}', {"agentSignIn": True}, "private file")
+        os.chmod(cfgfile, 0o666)
+        got = ask_config()
+        check(got == {"kind": "config", "config": None}, "getConfig group/world writable: got %r" % (got,))
+        os.chmod(cfgfile, 0o600)
     os.remove(cfgfile)
     os.mkdir(cfgfile)  # a directory at the path
     got = ask_config()

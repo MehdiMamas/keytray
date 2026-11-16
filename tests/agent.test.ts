@@ -401,6 +401,11 @@ describe('applyFileConfig', () => {
     expect(applyFileConfig(ownStar, { agentSignIn: true, allowAll: true })).toBeNull();
   });
 
+  it('does not claim the from-file flag when the user had turned the agent on', () => {
+    const user = { ...base, agentEnabled: true };
+    expect(applyFileConfig(user, { agentSignIn: true })).toBeNull();
+  });
+
   it('does not claim a * the user added, and never removes it', () => {
     const user = { ...base, agentEnabled: true, agentConfigFromFile: true, agentAllowlist: ['*'] };
     expect(applyFileConfig(user, { agentSignIn: true, allowAll: true })).toBeNull();

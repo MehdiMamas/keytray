@@ -82,7 +82,8 @@ export function App() {
     const hasAll = list.includes(ALL_SITES);
     await updateSettings({
       agentAllowlist: list,
-      agentAllowAllFromFile: false,
+      // Keep the from-file flag while the file's own * stays; clear it when the user removes or adds *.
+      agentAllowAllFromFile: hadAll && hasAll ? (state?.settings.agentAllowAllFromFile ?? false) : false,
       agentAllowAllOffByUser: hasAll ? false : hadAll ? true : (state?.settings.agentAllowAllOffByUser ?? false),
     });
     setAllowlistDirty(false);

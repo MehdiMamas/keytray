@@ -100,5 +100,5 @@ The computer's owner can turn on Agent sign-in without clicking in Options. The 
 - Deleting the file, or setting `allowAll` to false, removes the `*` the file added, on the next browser start (a `*` the user added in Options stays). If the user removes `*` in Options, the file does not add it again until the user does.
 - `agentSignIn` false or missing never turns Agent sign-in off by itself; only the Options switch does.
 - The Options off switch always wins: once the user turns Agent sign-in off, the file cannot turn it on again until the user turns it on.
-- Any program running as the same user can write this file. That is the same trust level as the helper and its socket or pipe.
+- Any program running as the same user can write this file, and so can turn Agent sign-in on and allow all sites. Switching Agent sign-in off in Options blocks that.
 - `native/install.sh --enable` or `--allow-all` (Windows: `-Enable`, `-AllowAll`) writes the file; without a flag the installers never create or change it. Uninstall keeps `config.json`.

@@ -39,6 +39,10 @@ if ($Uninstall) {
   exit 0
 }
 
+foreach ($id in @($ExtraIds)) {
+  if ($id -cnotmatch "^[a-p]{32}$") { throw "Not an extension id (32 letters a-p): $id" }
+}
+
 # a real Python 3.8+; the WindowsApps python.exe is the Microsoft Store stub
 $py = $null
 foreach ($name in @("py", "python")) {
