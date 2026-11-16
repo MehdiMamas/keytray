@@ -166,7 +166,8 @@ def serve_pipe():
             try:
                 conn = listener.accept()
             except Exception:
-                continue  # failed key handshake: drop it and keep listening
+                time.sleep(0.05)  # failed key handshake: drop it, keep listening, never spin
+                continue
             threading.Thread(target=handle_pipe_client, args=(conn,), daemon=True).start()
 
 
