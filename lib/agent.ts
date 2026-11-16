@@ -7,6 +7,8 @@
 import { CODE_MAX_AGE_MS, type CodeEntry } from './types';
 
 export const DEFAULT_AGENT_ALLOWLIST = ['github.com', 'google.com', 'vercel.com', 'apple.com'];
+/** Allowlist entry meaning every https site. */
+export const ALL_SITES = '*';
 export const RATE_LIMIT_MAX = 10;
 export const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 export const LOG_MAX = 200;
@@ -43,6 +45,10 @@ export function normalizeAllowlist(list: string[]): string[] {
   for (const raw of list) {
     let item = raw.trim().toLowerCase();
     if (!item) continue;
+    if (item === ALL_SITES) {
+      if (!out.includes(ALL_SITES)) out.push(ALL_SITES);
+      continue;
+    }
     if (item.includes('://')) item = hostOf(item);
     item = item.replace(/^\*\./, '').replace(/\/.*$/, '').replace(/\.$/, '');
     if (item && !out.includes(item)) out.push(item);
@@ -50,7 +56,10 @@ export function normalizeAllowlist(list: string[]): string[] {
   return out;
 }
 
-/** True when the URL's host equals an allowlisted host or is a subdomain of it. https only. */
+/**
+ * True when the URL is https and its host equals an allowlisted host or is a
+ * subdomain of it. A '*' entry allows any https host.
+ */
 export function isAllowedUrl(url: string, allowlist: string[]): boolean {
   let parsed: URL;
   try {
@@ -61,7 +70,23 @@ export function isAllowedUrl(url: string, allowlist: string[]): boolean {
   if (parsed.protocol !== 'https:') return false;
   const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
   if (!host) return false;
-  return normalizeAllowlist(allowlist).some((entry) => host === entry || host.endsWith(`.${entry}`));
+  return normalizeAllowlist(allowlist).some(
+    (entry) => entry === ALL_SITES || host === entry || host.endsWith(`.${entry}`),
+  );
+}
+
+/** True when the URL is https and on the tab's own host or a subdomain of it. */
+export function sameSite(url: string, tabHost: string): boolean {
+  if (!tabHost) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  return host === tabHost || host.endsWith(`.${tabHost}`);
 }
 
 export class RateLimiter {
@@ -196,6 +221,11 @@ export async function runAgentCommand(request: AgentRequest, deps: AgentDeps): P
   if (!url) return finish({ ok: false, error: 'tab not found' });
   host = hostOf(url);
   if (!isAllowedUrl(url, config.allowlist)) return finish({ ok: false, error: 'site is not allowlisted' });
+  // With '*' the code and links still go only to listed hosts or the tab's own site.
+  const normalized = normalizeAllowlist(config.allowlist);
+  const hasAll = normalized.includes(ALL_SITES);
+  const listedOnly = normalized.filter((e) => e !== ALL_SITES);
+  const destinationOk = (u: string): boolean => isAllowedUrl(u, listedOnly) || (hasAll && sameSite(u, host));
 
   if (command === 'pending') {
     const [hasField, entries, used] = await Promise.all([deps.hasCodeField(tabId), deps.getEntries(), deps.getUsed()]);
@@ -211,7 +241,7 @@ export async function runAgentCommand(request: AgentRequest, deps: AgentDeps): P
     for (;;) {
       const entry = newestUsable(await deps.getEntries(), await deps.getUsed(), deps.now(), 'code');
       if (entry) {
-        const filled = await deps.fill(tabId, entry.code, (u) => isAllowedUrl(u, config.allowlist));
+        const filled = await deps.fill(tabId, entry.code, destinationOk);
         if (!filled) return finish({ ok: false, error: 'no code field filled on this tab' });
         await deps.markUsed(entry.id);
         return finish({ ok: true, filled: true, sender: senderName(entry.from), ageSeconds: age(entry, deps.now()) });
@@ -232,7 +262,7 @@ export async function runAgentCommand(request: AgentRequest, deps: AgentDeps): P
   // open_link
   const entry = newestUsable(await deps.getEntries(), await deps.getUsed(), deps.now(), 'link');
   if (!entry?.url) return finish({ ok: false, error: 'no fresh sign-in link' });
-  if (!isAllowedUrl(entry.url, config.allowlist)) return finish({ ok: false, error: 'link site is not allowlisted' });
+  if (!destinationOk(entry.url)) return finish({ ok: false, error: 'link site is not allowlisted' });
   await deps.navigate(tabId, entry.url);
   await deps.markUsed(entry.id);
   return finish({ ok: true, opened: true, sender: senderName(entry.from), ageSeconds: age(entry, deps.now()) });

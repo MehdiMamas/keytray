@@ -5,6 +5,7 @@ import {
   RateLimiter,
   appendLog,
   isAllowedUrl,
+  normalizeAllowlist,
   runAgentCommand,
   sanitizeReply,
   type AgentDeps,
@@ -26,6 +27,17 @@ describe('isAllowedUrl', () => {
   });
   it('tolerates messy allowlist entries', () => {
     expect(isAllowedUrl('https://a.github.com', [' *.GitHub.com ', ''])).toBe(true);
+  });
+});
+
+describe('all sites', () => {
+  it('normalizeAllowlist keeps * exactly once', () => {
+    expect(normalizeAllowlist(['*', ' * ', 'github.com'])).toEqual(['*', 'github.com']);
+  });
+  it('isAllowedUrl with * allows any https host', () => {
+    expect(isAllowedUrl('https://example.org', ['*'])).toBe(true);
+    expect(isAllowedUrl('https://a.b.example.org', ['*'])).toBe(true);
+    expect(isAllowedUrl('http://example.org', ['*'])).toBe(false);
   });
 });
 
@@ -83,9 +95,10 @@ function makeDeps(opts: {
   entries?: CodeEntry[];
   fillResult?: boolean;
   onPoll?: () => void;
+  allowlist?: string[];
 } = {}) {
   let t = NOW;
-  const calls = { fill: [] as string[], nav: [] as string[], polls: 0, frameChecks: [] as boolean[] };
+  const calls = { fill: [] as string[], nav: [] as string[], polls: 0, frameChecks: [] as boolean[], probe: [] as boolean[] };
   const used = new Set<string>();
   const log: AgentLogEntry[] = [];
   const entries = opts.entries ?? [entry()];
@@ -94,7 +107,7 @@ function makeDeps(opts: {
     sleep: async (ms) => {
       t += ms;
     },
-    getConfig: async () => ({ enabled: opts.enabled ?? true, allowlist: DEFAULT_AGENT_ALLOWLIST }),
+    getConfig: async () => ({ enabled: opts.enabled ?? true, allowlist: opts.allowlist ?? DEFAULT_AGENT_ALLOWLIST }),
     getTabUrl: async () => (opts.tabUrl === undefined ? 'https://github.com/sessions/two-factor' : opts.tabUrl),
     hasCodeField: async () => true,
     getEntries: async () => entries,
@@ -104,6 +117,11 @@ function makeDeps(opts: {
     },
     fill: async (_tab, code, allowed) => {
       calls.frameChecks.push(allowed('https://github.com/x'), allowed('https://evil.com/x'));
+      calls.probe.push(
+        allowed('https://example.org/x'),
+        allowed('https://login.example.org'),
+        allowed('https://ads.other.net'),
+      );
       calls.fill.push(code);
       return opts.fillResult ?? true;
     },
@@ -219,5 +237,27 @@ describe('runAgentCommand', () => {
     const { deps } = makeDeps();
     expect(await runAgentCommand({ command: 'rm' }, deps)).toMatchObject({ ok: false });
     expect(await runAgentCommand({ command: 'pending' }, deps)).toMatchObject({ error: 'tab id required' });
+  });
+
+  it('with * fills on any https tab but only into the tab site and listed frames', async () => {
+    const h = makeDeps({ tabUrl: 'https://example.org/login', allowlist: ['*'] });
+    expect(await runAgentCommand({ command: 'fill_code', args: [5] }, h.deps)).toMatchObject({ ok: true, filled: true });
+    expect(h.calls.probe).toEqual([true, true, false]);
+    const listed = makeDeps({ tabUrl: 'https://example.org/login', allowlist: ['*', 'other.net'] });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, listed.deps);
+    expect(listed.calls.probe).toEqual([true, true, true]);
+  });
+
+  it('with * open_link opens a link on the tab host but not another host', async () => {
+    const opts = { tabUrl: 'https://example.org/login', allowlist: ['*'] };
+    const good = makeDeps({ ...opts, entries: [entry({ kind: 'link', url: 'https://login.example.org/v?t=s' })] });
+    expect(await runAgentCommand({ command: 'open_link', args: [5] }, good.deps)).toMatchObject({ ok: true, opened: true });
+    expect(good.calls.nav).toEqual(['https://login.example.org/v?t=s']);
+    const bad = makeDeps({ ...opts, entries: [entry({ kind: 'link', url: 'https://other.net/v' })] });
+    expect(await runAgentCommand({ command: 'open_link', args: [5] }, bad.deps)).toMatchObject({
+      ok: false,
+      error: 'link site is not allowlisted',
+    });
+    expect(bad.calls.nav).toHaveLength(0);
   });
 });
