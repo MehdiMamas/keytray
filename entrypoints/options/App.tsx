@@ -308,7 +308,7 @@ export function App() {
         </div>
         {state.settings.agentAllowlist.includes(ALL_SITES) && (
           <p className="text-xs text-ink/60">
-            All https sites. The code still goes only to the tab’s own site, and the rate limit stays.
+            All https sites. A site that is not in the list only gets codes and links mailed from that same site, and the rate limit stays.
           </p>
         )}
         <h3 className="text-sm font-semibold">Recent requests</h3>

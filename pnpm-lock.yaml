@@ -17,6 +17,9 @@ importers:
       react-dom:
         specifier: ^19.1.0
         version: 19.3.0(react@19.3.0)
+      tldts:
+        specifier: ^7.5.4
+        version: 7.5.4
     devDependencies:
       '@types/react':
         specifier: ^19.1.0
@@ -2071,6 +2074,13 @@ packages:
   tinyspy@4.0.6:
     resolution: {integrity: sha512-u8KszXvGfU68hVcZpRHKG28T0krMuv2G5nDhiHaMLen/gIuFEgIJhaJuO69qjnXg5paSrbPMFfx3brNuN8eVSg==}
     engines: {node: '>=14.0.0'}
+
+  tldts-core@7.5.4:
+    resolution: {integrity: sha512-9+4zWtKEDZ3V3FoZ1B97rv+5z5oqp7yeXGVze3CxgQ+CJro9do9DCPD00wxstYZDXDMXsurkBerFfiB6GYtPbA==}
+
+  tldts@7.5.4:
+    resolution: {integrity: sha512-Rn2ABgjHZrA+jzqom5zhxA0hLohzYrIgfCPyhpTUxqsUrcsBYuab49LseR9waB9Jr8/MxdodvMHA91oRiGLO3Q==}
+    hasBin: true
 
   tmp@0.2.5:
     resolution: {integrity: sha512-voyz6MApa1rQGUxT3E+BK7/ROe8itEx7vD8/HEvt4xwXucvQ5G5oeEiHkmHZJuBO21RpOf+YYm9MOivj709jow==}
@@ -4185,6 +4195,12 @@ snapshots:
   tinyrainbow@2.0.0: {}
 
   tinyspy@4.0.6: {}
+
+  tldts-core@7.5.4: {}
+
+  tldts@7.5.4:
+    dependencies:
+      tldts-core: 7.5.4
 
   tmp@0.2.5: {}
 

@@ -58,12 +58,12 @@ From the extension:
 | `tab id required` | `args[0]` is missing or not a non-negative integer |
 | `rate limit reached` | More than 10 requests in a rolling 10 min (`status` is not counted) |
 | `tab not found` | No tab with that id |
-| `site is not allowlisted` | The tab's host is not in the allowlist (exact host or subdomain, https only) |
+| `site is not allowlisted` | The tab's host is not in the allowlist (exact host or subdomain, https only), or the tab moved to such a site while waiting |
 | `no fresh code` | `fill_code` without wait: no unused code from the last 10 min |
 | `timed out waiting for a code` | `fill_code` with wait: none arrived in time |
 | `no code field filled on this tab` | A code exists but no allowlisted frame had a field that took it |
 | `no fresh sign-in link` | `open_link`: no unused link from the last 10 min |
-| `link site is not allowlisted` | The link's own host is not in the allowlist |
+| `link site is not allowlisted` | The link's own host is not in the allowlist (with all sites on: not on the sender's own site) |
 | any other text | An exception inside the extension (its message) |
 
 From the host:
@@ -80,3 +80,7 @@ From the client side (no reply at all):
 | Socket file missing (ENOENT) | Host not running: Agent sign-in is off, the permission is not granted, `native/install.sh` was not run, or the browser is closed |
 | Connection refused (ECONNREFUSED) | Stale socket from a host that crashed; the browser will start a new host when it reconnects |
 | Empty reply / closed early | Host exited mid-request |
+
+## All sites
+
+With `*` in the allowlist, listed sites work as before. A site that is not in the list only gets codes and links mailed from that same site (its registrable domain), and mail that failed Gmail's DMARC check is ignored for it. `pending` follows the same rule, and the tab is checked again just before each fill or open.

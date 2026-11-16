@@ -31,6 +31,7 @@ export interface ParsedMessage {
   /** Raw HTML part, kept so verification buttons can be read from hrefs. */
   html: string;
   receivedAt: number;
+  dmarc?: 'pass' | 'fail';
 }
 
 interface GmailHeader {
@@ -149,7 +150,10 @@ export function parseGmailMessage(raw: GmailMessage): ParsedMessage {
   const html = htmlPart ? decodeBody(htmlPart) : '';
   const body = plain ? decodeBody(plain) : html ? htmlToText(html) : raw.snippet ?? '';
   const receivedAt = raw.internalDate ? Number(raw.internalDate) : Date.parse(header(headers, 'Date')) || Date.now();
-  return { id: raw.id, from, subject, body, html, receivedAt };
+  // The first Authentication-Results header is the one Gmail itself added.
+  const auth = header(headers, 'Authentication-Results').toLowerCase();
+  const dmarc = /\bdmarc=fail\b/.test(auth) ? 'fail' : /\bdmarc=pass\b/.test(auth) ? 'pass' : undefined;
+  return { id: raw.id, from, subject, body, html, receivedAt, ...(dmarc ? { dmarc } : {}) };
 }
 
 function header(headers: GmailHeader[], name: string): string {
