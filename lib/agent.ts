@@ -4,6 +4,7 @@
  * code or the URL. Chrome access is injected through AgentDeps so this file
  * is unit-testable.
  */
+import { getDomain } from 'tldts';
 import { CODE_MAX_AGE_MS, type CodeEntry } from './types';
 
 export const DEFAULT_AGENT_ALLOWLIST = ['github.com', 'google.com', 'vercel.com', 'apple.com'];
@@ -75,18 +76,49 @@ export function isAllowedUrl(url: string, allowlist: string[]): boolean {
   );
 }
 
-/** True when the URL is https and on the tab's own host or a subdomain of it. */
-export function sameSite(url: string, tabHost: string): boolean {
-  if (!tabHost) return false;
-  let parsed: URL;
+/**
+ * Registrable domain (site) of a host, counting private suffixes such as
+ * vercel.app or github.io as public. Empty when unparsable or when the host is
+ * itself a public suffix. Fails closed.
+ */
+export function siteOf(host: string): string {
   try {
-    parsed = new URL(url);
+    const name = new URL('https://' + host.trim()).hostname.toLowerCase().replace(/\.$/, '');
+    return getDomain(name, { allowPrivateDomains: true }) ?? '';
   } catch {
-    return false;
+    return '';
   }
-  if (parsed.protocol !== 'https:') return false;
-  const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
-  return host === tabHost || host.endsWith(`.${tabHost}`);
+}
+
+/** Domain of the address in a From header: after the last '@' of the last <...>. */
+export function senderDomain(from: string): string {
+  const brackets = [...from.matchAll(/<([^<>]*)>/g)];
+  const addr = (brackets.length ? brackets[brackets.length - 1][1] : from).trim();
+  const at = addr.lastIndexOf('@');
+  if (at < 0) return '';
+  const domain = addr.slice(at + 1).replace(/[>\s]+$/, '');
+  if (!domain) return '';
+  try {
+    return new URL('https://' + domain).hostname;
+  } catch {
+    return '';
+  }
+}
+
+/** Site of the entry's sender; empty when unknown or when the mail failed DMARC. */
+export function entrySite(e: CodeEntry): string {
+  if (e.dmarc === 'fail') return '';
+  return siteOf(senderDomain(e.from));
+}
+
+/** Site of an https URL; empty for anything else. */
+export function urlSite(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' ? siteOf(parsed.hostname) : '';
+  } catch {
+    return '';
+  }
 }
 
 export class RateLimiter {
@@ -136,11 +168,13 @@ export function newestUsable(
   used: ReadonlySet<string>,
   now: number,
   want: 'code' | 'link',
+  accept?: (e: CodeEntry) => boolean,
 ): CodeEntry | undefined {
   return entries
     .filter((e) => {
       if (used.has(e.id)) return false;
       if (now - e.receivedAt > CODE_MAX_AGE_MS) return false;
+      if (accept && !accept(e)) return false;
       return want === 'code' ? (e.kind ?? 'code') === 'code' : Boolean(e.url);
     })
     .sort((a, b) => b.receivedAt - a.receivedAt)[0];
@@ -217,21 +251,48 @@ export async function runAgentCommand(request: AgentRequest, deps: AgentDeps): P
   if (tabId === null) return finish({ ok: false, error: 'tab id required' });
   if (!deps.limiter.take(deps.now())) return finish({ ok: false, error: 'rate limit reached' });
 
-  const url = await deps.getTabUrl(tabId);
-  if (!url) return finish({ ok: false, error: 'tab not found' });
-  host = hostOf(url);
-  if (!isAllowedUrl(url, config.allowlist)) return finish({ ok: false, error: 'site is not allowlisted' });
-  // With '*' the code and links still go only to listed hosts or the tab's own site.
   const normalized = normalizeAllowlist(config.allowlist);
   const hasAll = normalized.includes(ALL_SITES);
   const listedOnly = normalized.filter((e) => e !== ALL_SITES);
-  const destinationOk = (u: string): boolean => isAllowedUrl(u, listedOnly) || (hasAll && sameSite(u, host));
+
+  type Ctx =
+    | { error: string }
+    | {
+        accept: (e: CodeEntry) => boolean;
+        frameOk: (e: CodeEntry) => (u: string) => boolean;
+        linkOk: (e: CodeEntry, u: string) => boolean;
+      };
+  /**
+   * Reads the tab's current URL and decides the mode. Listed sites take any
+   * sender. With '*', other https sites only take mail from their own site.
+   */
+  const context = async (): Promise<Ctx> => {
+    const url = await deps.getTabUrl(tabId);
+    if (!url) return { error: 'tab not found' };
+    host = hostOf(url);
+    if (isAllowedUrl(url, listedOnly)) {
+      return {
+        accept: () => true,
+        frameOk: () => (u) => isAllowedUrl(u, listedOnly),
+        linkOk: (_e, u) => isAllowedUrl(u, listedOnly),
+      };
+    }
+    const tabSite = hasAll ? urlSite(url) : '';
+    if (!tabSite) return { error: 'site is not allowlisted' };
+    return {
+      accept: (e) => entrySite(e) !== '' && entrySite(e) === tabSite,
+      frameOk: (e) => (u) => urlSite(u) === entrySite(e),
+      linkOk: (e, u) => urlSite(u) === entrySite(e),
+    };
+  };
 
   if (command === 'pending') {
+    const ctx = await context();
+    if ('error' in ctx) return finish({ ok: false, error: ctx.error });
     const [hasField, entries, used] = await Promise.all([deps.hasCodeField(tabId), deps.getEntries(), deps.getUsed()]);
     const now = deps.now();
-    const code = newestUsable(entries, used, now, 'code');
-    const link = newestUsable(entries, used, now, 'link');
+    const code = newestUsable(entries, used, now, 'code', ctx.accept);
+    const link = newestUsable(entries, used, now, 'link', ctx.accept);
     const pick = (e?: CodeEntry) => (e ? { sender: senderName(e.from), ageSeconds: age(e, now) } : null);
     return finish({ ok: true, hasField, codeAvailable: pick(code), linkAvailable: pick(link) });
   }
@@ -239,9 +300,15 @@ export async function runAgentCommand(request: AgentRequest, deps: AgentDeps): P
   if (command === 'fill_code') {
     const deadline = deps.now() + waitArg(request.args) * 1000;
     for (;;) {
-      const entry = newestUsable(await deps.getEntries(), await deps.getUsed(), deps.now(), 'code');
+      // Re-read the tab on every pass: it may have navigated while we waited.
+      let ctx = await context();
+      if ('error' in ctx) return finish({ ok: false, error: ctx.error });
+      const entry = newestUsable(await deps.getEntries(), await deps.getUsed(), deps.now(), 'code', ctx.accept);
       if (entry) {
-        const filled = await deps.fill(tabId, entry.code, destinationOk);
+        ctx = await context();
+        if ('error' in ctx) return finish({ ok: false, error: ctx.error });
+        if (!ctx.accept(entry)) return finish({ ok: false, error: 'site is not allowlisted' });
+        const filled = await deps.fill(tabId, entry.code, ctx.frameOk(entry));
         if (!filled) return finish({ ok: false, error: 'no code field filled on this tab' });
         await deps.markUsed(entry.id);
         return finish({ ok: true, filled: true, sender: senderName(entry.from), ageSeconds: age(entry, deps.now()) });
@@ -260,9 +327,14 @@ export async function runAgentCommand(request: AgentRequest, deps: AgentDeps): P
   }
 
   // open_link
-  const entry = newestUsable(await deps.getEntries(), await deps.getUsed(), deps.now(), 'link');
+  let ctx = await context();
+  if ('error' in ctx) return finish({ ok: false, error: ctx.error });
+  const entry = newestUsable(await deps.getEntries(), await deps.getUsed(), deps.now(), 'link', ctx.accept);
   if (!entry?.url) return finish({ ok: false, error: 'no fresh sign-in link' });
-  if (!destinationOk(entry.url)) return finish({ ok: false, error: 'link site is not allowlisted' });
+  ctx = await context();
+  if ('error' in ctx) return finish({ ok: false, error: ctx.error });
+  if (!ctx.accept(entry)) return finish({ ok: false, error: 'site is not allowlisted' });
+  if (!ctx.linkOk(entry, entry.url)) return finish({ ok: false, error: 'link site is not allowlisted' });
   await deps.navigate(tabId, entry.url);
   await deps.markUsed(entry.id);
   return finish({ ok: true, opened: true, sender: senderName(entry.from), ageSeconds: age(entry, deps.now()) });

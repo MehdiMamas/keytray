@@ -22,6 +22,21 @@ describe('gmail parsing', () => {
     expect(raw.receivedAt).toBe(1700000000000);
   });
 
+  it('reads the first Authentication-Results header for the DMARC verdict', () => {
+    const mk = (values: string[]) =>
+      parseGmailMessage({
+        id: 'd',
+        payload: {
+          headers: values.map((value) => ({ name: 'Authentication-Results', value })),
+          mimeType: 'text/plain',
+          body: { data: encode('x') },
+        },
+      }).dmarc;
+    expect(mk(['mx.google.com; dmarc=pass (p=NONE) header.from=a.com', 'x; dmarc=fail'])).toBe('pass');
+    expect(mk(['mx.google.com; spf=pass; dmarc=fail (p=REJECT)'])).toBe('fail');
+    expect(mk(['mx.google.com; spf=pass'])).toBeUndefined();
+  });
+
   it('keeps the html part when a plain part is also present', () => {
     const raw = parseGmailMessage({
       id: 'm2',

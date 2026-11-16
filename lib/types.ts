@@ -28,6 +28,8 @@ export interface CodeEntry {
   kind?: EntryKind;
   /** Verification or sign-in URL. Present on link entries, and on a code when the same message has both. */
   url?: string;
+  /** Gmail's own DMARC verdict for the message, when it reported one. */
+  dmarc?: 'pass' | 'fail';
 }
 
 export type PopupShows = 'all' | 'codes' | 'links';

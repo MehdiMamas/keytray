@@ -7,6 +7,9 @@ import {
   isAllowedUrl,
   normalizeAllowlist,
   runAgentCommand,
+  senderDomain,
+  siteOf,
+  urlSite,
   sanitizeReply,
   type AgentDeps,
   type AgentLogEntry,
@@ -239,25 +242,123 @@ describe('runAgentCommand', () => {
     expect(await runAgentCommand({ command: 'pending' }, deps)).toMatchObject({ error: 'tab id required' });
   });
 
-  it('with * fills on any https tab but only into the tab site and listed frames', async () => {
-    const h = makeDeps({ tabUrl: 'https://example.org/login', allowlist: ['*'] });
+  it('with * fills on an unlisted tab only from a sender of the same site', async () => {
+    const entries = [
+      entry({ id: 'a:2', code: '222222', from: 'X <noreply@other.net>', receivedAt: NOW - 5_000 }),
+      entry({ id: 'a:3', code: '333333', from: 'Ex <no-reply@example.org>', receivedAt: NOW - 20_000 }),
+    ];
+    const h = makeDeps({ tabUrl: 'https://app.example.org/login', allowlist: ['*'], entries });
     expect(await runAgentCommand({ command: 'fill_code', args: [5] }, h.deps)).toMatchObject({ ok: true, filled: true });
+    expect(h.calls.fill).toEqual(['333333']);
     expect(h.calls.probe).toEqual([true, true, false]);
-    const listed = makeDeps({ tabUrl: 'https://example.org/login', allowlist: ['*', 'other.net'] });
-    await runAgentCommand({ command: 'fill_code', args: [5] }, listed.deps);
-    expect(listed.calls.probe).toEqual([true, true, true]);
   });
 
-  it('with * open_link opens a link on the tab host but not another host', async () => {
+  it('with * a phishing tab gets nothing from another site sender', async () => {
+    const h = makeDeps({ tabUrl: 'https://github-login.example-phish.com/x', allowlist: ['*'] });
+    expect(await runAgentCommand({ command: 'fill_code', args: [5] }, h.deps)).toMatchObject({ ok: false });
+    expect(h.calls.fill).toHaveLength(0);
+    const p = await runAgentCommand({ command: 'pending', args: [5] }, h.deps);
+    expect(p).toMatchObject({ ok: true, codeAvailable: null, linkAvailable: null });
+  });
+
+  it('without * an unlisted tab is refused', async () => {
+    const h = makeDeps({ tabUrl: 'https://app.example.org/', allowlist: ['github.com'], entries: [entry({ from: 'a@example.org' })] });
+    expect(await runAgentCommand({ command: 'fill_code', args: [5] }, h.deps)).toMatchObject({ error: 'site is not allowlisted' });
+  });
+
+  it('private suffixes are public suffixes', async () => {
+    const e = [entry({ from: 'x@foo.vercel.app' })];
+    const other = makeDeps({ tabUrl: 'https://bar.vercel.app/', allowlist: ['*'], entries: e });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, other.deps);
+    expect(other.calls.fill).toHaveLength(0);
+    const same = makeDeps({ tabUrl: 'https://foo.vercel.app/', allowlist: ['*'], entries: e });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, same.deps);
+    expect(same.calls.fill).toHaveLength(1);
+    const bare = makeDeps({ tabUrl: 'https://vercel.app/', allowlist: ['*'], entries: [entry({ from: 'x@vercel.app' })] });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, bare.deps);
+    expect(bare.calls.fill).toHaveLength(0);
+  });
+
+  it('a display name with an address does not fool the match', async () => {
+    const h = makeDeps({
+      tabUrl: 'https://example.org/',
+      allowlist: ['*'],
+      entries: [entry({ from: '"noreply@example.org" <a@evil.test>' })],
+    });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, h.deps);
+    expect(h.calls.fill).toHaveLength(0);
+  });
+
+  it('dmarc fail is excluded in sender mode but fine for listed sites', async () => {
+    const e = [entry({ from: 'a@example.org', dmarc: 'fail' })];
+    const s = makeDeps({ tabUrl: 'https://example.org/', allowlist: ['*'], entries: e });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, s.deps);
+    expect(s.calls.fill).toHaveLength(0);
+    const l = makeDeps({ entries: [entry({ dmarc: 'fail' })], allowlist: ['*', 'github.com'] });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, l.deps);
+    expect(l.calls.fill).toHaveLength(1);
+  });
+
+  it('listed tab with * still takes any sender', async () => {
+    const h = makeDeps({ allowlist: ['*', 'github.com'], entries: [entry({ from: 'Z <a@other.net>' })] });
+    await runAgentCommand({ command: 'fill_code', args: [5] }, h.deps);
+    expect(h.calls.fill).toHaveLength(1);
+  });
+
+  it('re-reads the tab URL while waiting and does not fill a navigated tab', async () => {
+    const h = makeDeps({ tabUrl: 'https://app.example.org/', allowlist: ['*'], entries: [] });
+    let reads = 0;
+    h.deps.getTabUrl = async () => (reads++ === 0 ? 'https://app.example.org/' : 'https://evil.test/');
+    h.deps.getEntries = async () => (h.calls.polls >= 1 ? [entry({ from: 'a@example.org', receivedAt: h.deps.now() })] : []);
+    const r = await runAgentCommand({ command: 'fill_code', args: [5, 60] }, h.deps);
+    expect(r).toMatchObject({ ok: false });
+    expect(h.calls.fill).toHaveLength(0);
+  });
+
+  it('a vanished tab while waiting returns tab not found', async () => {
+    const h = makeDeps({ tabUrl: 'https://app.example.org/', allowlist: ['*'], entries: [] });
+    let reads = 0;
+    h.deps.getTabUrl = async () => (reads++ === 0 ? 'https://app.example.org/' : null);
+    const r = await runAgentCommand({ command: 'fill_code', args: [5, 60] }, h.deps);
+    expect(r).toMatchObject({ ok: false, error: 'tab not found' });
+  });
+
+  it('open_link in sender mode needs sender and link on the tab site', async () => {
     const opts = { tabUrl: 'https://example.org/login', allowlist: ['*'] };
-    const good = makeDeps({ ...opts, entries: [entry({ kind: 'link', url: 'https://login.example.org/v?t=s' })] });
+    const good = makeDeps({ ...opts, entries: [entry({ kind: 'link', from: 'a@example.org', url: 'https://login.example.org/v?t=s' })] });
     expect(await runAgentCommand({ command: 'open_link', args: [5] }, good.deps)).toMatchObject({ ok: true, opened: true });
     expect(good.calls.nav).toEqual(['https://login.example.org/v?t=s']);
-    const bad = makeDeps({ ...opts, entries: [entry({ kind: 'link', url: 'https://other.net/v' })] });
-    expect(await runAgentCommand({ command: 'open_link', args: [5] }, bad.deps)).toMatchObject({
-      ok: false,
-      error: 'link site is not allowlisted',
-    });
-    expect(bad.calls.nav).toHaveLength(0);
+    const offsite = makeDeps({ ...opts, entries: [entry({ kind: 'link', from: 'a@example.org', url: 'https://other.net/v' })] });
+    expect(await runAgentCommand({ command: 'open_link', args: [5] }, offsite.deps)).toMatchObject({ ok: false });
+    expect(offsite.calls.nav).toHaveLength(0);
+    const foreign = makeDeps({ ...opts, entries: [entry({ kind: 'link', from: 'a@other.net', url: 'https://example.org/v' })] });
+    expect(await runAgentCommand({ command: 'open_link', args: [5] }, foreign.deps)).toMatchObject({ ok: false });
+    expect(foreign.calls.nav).toHaveLength(0);
+  });
+});
+
+describe('siteOf and senderDomain', () => {
+  it('finds the registrable domain, incl. private suffixes', () => {
+    expect(siteOf('a.b.example.org')).toBe('example.org');
+    expect(siteOf('Example.ORG.')).toBe('example.org');
+    expect(siteOf('x.co.jp')).toBe('x.co.jp');
+    expect(siteOf('foo.vercel.app')).toBe('foo.vercel.app');
+    expect(siteOf('bücher.example')).toBe('xn--bcher-kva.example');
+  });
+  it('fails closed', () => {
+    for (const v of ['', 'vercel.app', 'com', 'a b', '%%%', 'localhost', '127.0.0.1']) expect(siteOf(v)).toBe('');
+  });
+  it('reads the domain after the last @ inside the last <...>', () => {
+    expect(senderDomain('GitHub <noreply@github.com>')).toBe('github.com');
+    expect(senderDomain('"noreply@github.com" <x@evil.com>')).toBe('evil.com');
+    expect(senderDomain('a@b@Example.org')).toBe('example.org');
+    expect(senderDomain('  a@example.org ')).toBe('example.org');
+    expect(senderDomain('no address')).toBe('');
+    expect(senderDomain('a@')).toBe('');
+  });
+  it('urlSite requires https', () => {
+    expect(urlSite('http://example.org')).toBe('');
+    expect(urlSite('https://a.example.org/x')).toBe('example.org');
+    expect(urlSite('junk')).toBe('');
   });
 });
