@@ -39,7 +39,7 @@ if ($Uninstall) {
   exit 0
 }
 
-foreach ($id in @($ExtraIds)) {
+foreach ($id in @($ExtraIds | Where-Object { $_ })) {
   if ($id -cnotmatch "^[a-p]{32}$") { throw "Not an extension id (32 letters a-p): $id" }
 }
 
