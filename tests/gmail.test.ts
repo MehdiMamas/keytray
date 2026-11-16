@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { decodeBody, GmailApiError, gmailMessageUrl, htmlToText, parseGmailMessage, pollGmail } from '~/lib/gmail';
+import { decodeBody, dmarcResult, GmailApiError, gmailMessageUrl, htmlToText, parseGmailMessage, pollGmail } from '~/lib/gmail';
 
 describe('gmail parsing', () => {
   it('decodes a base64url plain-text part', () => {
@@ -27,7 +27,7 @@ describe('gmail parsing', () => {
       parseGmailMessage({
         id: 'd',
         payload: {
-          headers: values.map((value) => ({ name: 'Authentication-Results', value })),
+          headers: [{ name: 'From', value: 'a@a.com' }, ...values.map((value) => ({ name: 'Authentication-Results', value }))],
           mimeType: 'text/plain',
           body: { data: encode('x') },
         },
@@ -35,6 +35,48 @@ describe('gmail parsing', () => {
     expect(mk(['mx.google.com; dmarc=pass (p=NONE) header.from=a.com', 'x; dmarc=fail'])).toBe('pass');
     expect(mk(['mx.google.com; spf=pass; dmarc=fail (p=REJECT)'])).toBe('fail');
     expect(mk(['mx.google.com; spf=pass'])).toBeUndefined();
+  });
+
+  it('gives no DMARC verdict when the message has two From headers', () => {
+    const msg = parseGmailMessage({
+      id: 'd2',
+      payload: {
+        headers: [
+          { name: 'From', value: 'a@a.com' },
+          { name: 'From', value: 'b@b.com' },
+          { name: 'Authentication-Results', value: 'mx.google.com; dmarc=pass header.from=a.com' },
+        ],
+        mimeType: 'text/plain',
+        body: { data: encode('x') },
+      },
+    });
+    expect(msg.dmarc).toBeUndefined();
+    expect(msg.dmarcFrom).toBeUndefined();
+  });
+
+  it('keeps the header.from domain Gmail evaluated, and needs exactly one', () => {
+    expect(dmarcResult('mx.google.com; dmarc=pass (p=REJECT) header.from=GitHub.com')).toEqual({ dmarc: 'pass', dmarcFrom: 'github.com' });
+    expect(dmarcResult('mx.google.com; dmarc=pass (p=NONE)')).toEqual({});
+    expect(dmarcResult('mx.google.com; dmarc=pass header.from=a.com; dmarc=pass header.from=b.com')).toEqual({});
+    expect(dmarcResult('mx.google.com; dmarc=pass header.from=xn--bcher-kva.example')).toEqual({ dmarc: 'pass', dmarcFrom: 'xn--bcher-kva.example' });
+    expect(dmarcResult('mx.google.com; spf=pass smtp.mailfrom="a\\"b"; dmarc=pass header.from=a.com')).toEqual({});
+  });
+
+  it('only trusts a dmarc result that starts a method segment of Gmail header', () => {
+    expect(dmarcResult('mx.google.com; dkim=pass header.i=@github.com; spf=pass; dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=github.com').dmarc).toBe('pass');
+    expect(dmarcResult('mx.google.com;\r\n       dmarc=pass (p=NONE) header.from=a.com').dmarc).toBe('pass');
+    // Sender-chosen text echoed in a comment or a property value does not count.
+    expect(dmarcResult('mx.google.com; spf=pass (google.com: domain of dmarc=pass@evil.test designates 1.2.3.4) smtp.mailfrom=dmarc=pass@evil.test').dmarc).toBeUndefined();
+    expect(dmarcResult('mx.google.com; spf=pass smtp.mailfrom="x;dmarc=pass"@evil.test').dmarc).toBeUndefined();
+    expect(dmarcResult('mx.google.com; spf=pass (a (nested; dmarc=pass) b) smtp.mailfrom=x@evil.test').dmarc).toBeUndefined();
+    expect(dmarcResult('mx.google.com; spf=pass (unclosed; dmarc=pass').dmarc).toBeUndefined();
+    // Another server's header, or no header.
+    expect(dmarcResult('evil.test; dmarc=pass').dmarc).toBeUndefined();
+    expect(dmarcResult('').dmarc).toBeUndefined();
+    expect(dmarcResult('mx.google.com; dmarc=fail (p=REJECT) header.from=a.com').dmarc).toBe('fail');
+    expect(dmarcResult('mx.google.com; dmarc=none header.from=a.com').dmarc).toBeUndefined();
+    expect(dmarcResult('mx.google.com; spf=pass smtp.mailfrom=a;dmarc=pass@e.test').dmarc).toBeUndefined();
+    expect(dmarcResult('mx.google.com 1; dmarc=pass header.from=a.com').dmarc).toBeUndefined();
   });
 
   it('keeps the html part when a plain part is also present', () => {

@@ -9,6 +9,7 @@ import {
   normalizeAllowlist,
   runAgentCommand,
   senderDomain,
+  entrySite,
   siteOf,
   urlSite,
   sanitizeReply,
@@ -89,6 +90,9 @@ function entry(over: Partial<CodeEntry> = {}): CodeEntry {
     subject: 's',
     receivedAt: NOW - 30_000,
     kind: 'code',
+    dmarc: 'pass',
+    // Gmail's header.from: by default the From domain, as in real mail.
+    dmarcFrom: (over.from ?? 'noreply@github.com').split('@').pop()!.replace(/[>\s]/g, '').toLowerCase(),
     ...over,
   };
 }
@@ -349,13 +353,53 @@ describe('siteOf and senderDomain', () => {
   it('fails closed', () => {
     for (const v of ['', 'vercel.app', 'com', 'a b', '%%%', 'localhost', '127.0.0.1']) expect(siteOf(v)).toBe('');
   });
-  it('reads the domain after the last @ inside the last <...>', () => {
+  it('reads the domain of the one address in the From header', () => {
     expect(senderDomain('GitHub <noreply@github.com>')).toBe('github.com');
     expect(senderDomain('"noreply@github.com" <x@evil.com>')).toBe('evil.com');
-    expect(senderDomain('a@b@Example.org')).toBe('example.org');
+    expect(senderDomain('a@b@Example.org')).toBe('');
+    expect(senderDomain('A@Example.ORG')).toBe('example.org');
+    for (const odd of [
+      '(c).x@attacker.test""v@victim.test',
+      'a@vic­tim.test',
+      'a@victim。test',
+      'a@ｖictim.test',
+      '<@route:a@victim.test>',
+      'grp: a@victim.test;',
+      '"a\\"b" <a@victim.test>',
+      '(\\) <a@x.test>) <b@victim.test>',
+    ]) {
+      expect(senderDomain(odd)).toBe('');
+    }
     expect(senderDomain('  a@example.org ')).toBe('example.org');
     expect(senderDomain('no address')).toBe('');
     expect(senderDomain('a@')).toBe('');
+    // An address inside a comment is not the sender.
+    expect(senderDomain('"X" <a@evil.test> (note <b@good.com>)')).toBe('evil.test');
+    expect(senderDomain('<a@evil.test> (<b@good.com>)')).toBe('evil.test');
+    for (const odd of [
+      'A <a@evil.test>, B <b@good.com>',
+      'a@evil.test, b@good.com',
+      '<a@evil.test> <b@good.com>',
+      'X <a@evil.test',
+      '"unclosed <a@good.com>',
+    ]) {
+      expect(senderDomain(odd)).toBe('');
+    }
+    expect(senderDomain('"GitHub, Inc." <noreply@github.com>')).toBe('github.com');
+    expect(senderDomain('GitHub (bot) <noreply@github.com>')).toBe('github.com');
+    for (const odd of ['x@good.com/y', 'x@good.com#x', 'x@good.com:80', 'x@good.com?x', 'x@good.com\\y', 'x@go%6fd.com']) {
+      expect(senderDomain(odd)).toBe('');
+    }
+  });
+  it('entrySite needs a DMARC pass', () => {
+    expect(entrySite(entry({ from: 'a@example.org' }))).toBe('example.org');
+    expect(entrySite(entry({ from: 'a@example.org', dmarc: undefined }))).toBe('');
+    expect(entrySite(entry({ from: 'a@example.org', dmarc: 'fail' }))).toBe('');
+  });
+  it('entrySite needs the domain Gmail evaluated to be on the same site', () => {
+    expect(entrySite(entry({ from: 'a@mail.example.org', dmarcFrom: 'example.org' }))).toBe('example.org');
+    expect(entrySite(entry({ from: 'a@example.org', dmarcFrom: 'attacker.test' }))).toBe('');
+    expect(entrySite(entry({ from: 'a@example.org', dmarcFrom: undefined }))).toBe('');
   });
   it('urlSite requires https', () => {
     expect(urlSite('http://example.org')).toBe('');

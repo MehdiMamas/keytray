@@ -30,6 +30,8 @@ export interface CodeEntry {
   url?: string;
   /** Gmail's own DMARC verdict for the message, when it reported one. */
   dmarc?: 'pass' | 'fail';
+  /** On a DMARC pass: the From domain Gmail evaluated (header.from). */
+  dmarcFrom?: string;
 }
 
 export type PopupShows = 'all' | 'codes' | 'links';
