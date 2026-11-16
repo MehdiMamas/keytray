@@ -3,7 +3,7 @@ import { browser } from 'wxt/browser';
 import { signInInteractive } from '~/lib/auth';
 import { FREE_ACCOUNT_LIMIT } from '~/lib/account-limit';
 import { openPaymentPage } from '~/lib/billing';
-import { DEFAULT_AGENT_ALLOWLIST, normalizeAllowlist, type AgentLogEntry } from '~/lib/agent';
+import { ALL_SITES, DEFAULT_AGENT_ALLOWLIST, normalizeAllowlist, type AgentLogEntry } from '~/lib/agent';
 import { loadAgentLog, validateCustomOAuth } from '~/lib/storage';
 import type { ExtensionResponse } from '~/lib/messages';
 import type { CodeClickAction, Mode, PopupShows, PublicState, Settings } from '~/lib/types';
@@ -267,7 +267,7 @@ export function App() {
         <h2 className="text-lg font-semibold">Agent sign-in</h2>
         <p className="text-xs text-ink/60">
           Lets a local program on this computer ask Keytray to fill the newest code, or open the newest sign-in link, in
-          a tab. The program never sees the code or the link. It needs the helper from native/install.sh.
+          a tab. The program never sees the code or the link. It needs the helper from native/install.sh (macOS, Linux) or native\windows\install.ps1 (Windows).
         </p>
         <Toggle
           label="Allow agent sign-in"
@@ -299,7 +299,18 @@ export function App() {
           >
             Reset to defaults
           </button>
+          <button
+            className="rounded-md border border-line px-3 py-1.5 text-sm"
+            onClick={() => void saveAllowlist(ALL_SITES)}
+          >
+            Allow all sites
+          </button>
         </div>
+        {state.settings.agentAllowlist.includes(ALL_SITES) && (
+          <p className="text-xs text-ink/60">
+            All https sites. The code still goes only to the tab’s own site, and the rate limit stays.
+          </p>
+        )}
         <h3 className="text-sm font-semibold">Recent requests</h3>
         {agentLog.length === 0 ? (
           <p className="text-sm text-ink/70">No requests yet.</p>
