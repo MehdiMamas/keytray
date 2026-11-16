@@ -3,17 +3,60 @@
 
 Chrome starts this process and talks to it over stdio with 4-byte length-prefixed
 JSON. Local programs talk to it over a unix socket (mode 0600): they send one
-JSON line and get one JSON line back. Python 3 standard library only.
+JSON line and get one JSON line back. On Windows they use a named pipe instead,
+authenticated with the key in agent.key. Python 3 standard library only.
 """
+import getpass
 import json
 import os
 import socket
 import struct
 import sys
 import threading
+import time
 import uuid
 
 REPLY_TIMEOUT = 130
+WINDOWS = os.name == "nt"
+
+
+def appdir():
+    override = os.environ.get("KEYTRAY_APPDIR")
+    if override:
+        return override
+    return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "Keytray")
+
+
+def pipe_name():
+    override = os.environ.get("KEYTRAY_AGENT_PIPE")
+    if override:
+        return override
+    return "\\\\.\\pipe\\keytray-agent-" + getpass.getuser()
+
+
+def load_key():
+    # 32 random bytes made on first start; a missing or wrong-sized file counts as missing.
+    # Written to a temp file and moved into place so two racing starts end up with one key.
+    directory = appdir()
+    keyfile = os.path.join(directory, "agent.key")
+    os.makedirs(directory, exist_ok=True)
+
+    def read():
+        try:
+            with open(keyfile, "rb") as f:
+                data = f.read()
+        except OSError:
+            return None
+        return data if len(data) == 32 else None
+
+    key = read()
+    if key:
+        return key
+    tmp = os.path.join(directory, "agent.key.%s.tmp" % uuid.uuid4().hex)
+    with open(tmp, "wb") as f:
+        f.write(os.urandom(32))
+    os.replace(tmp, keyfile)
+    return read() or load_key()
 
 
 def socket_path():
@@ -50,6 +93,31 @@ def send_to_extension(message):
         sys.stdout.buffer.flush()
 
 
+def relay(raw):
+    try:
+        request = json.loads(raw.decode("utf-8"))
+        if not isinstance(request, dict):
+            raise ValueError("request must be an object")
+    except ValueError as error:
+        return {"ok": False, "error": "bad request: %s" % error}
+    req_id = uuid.uuid4().hex
+    slot = {"event": threading.Event(), "reply": None}
+    with pending_lock:
+        pending[req_id] = slot
+    try:
+        send_to_extension({"id": req_id, "command": request.get("command"), "args": request.get("args", [])})
+        if slot["event"].wait(REPLY_TIMEOUT):
+            reply = slot["reply"]
+        else:
+            reply = {"ok": False, "error": "no reply from the extension"}
+    finally:
+        with pending_lock:
+            pending.pop(req_id, None)
+    reply = dict(reply)
+    reply.pop("id", None)
+    return reply
+
+
 def handle_client(conn):
     try:
         conn.settimeout(10)
@@ -60,33 +128,46 @@ def handle_client(conn):
                 break
             buf += chunk
         line = buf.split(b"\n", 1)[0]
-        try:
-            request = json.loads(line.decode("utf-8"))
-            if not isinstance(request, dict):
-                raise ValueError("request must be an object")
-        except ValueError as error:
-            conn.sendall((json.dumps({"ok": False, "error": "bad request: %s" % error}) + "\n").encode())
-            return
-        req_id = uuid.uuid4().hex
-        slot = {"event": threading.Event(), "reply": None}
-        with pending_lock:
-            pending[req_id] = slot
-        try:
-            send_to_extension({"id": req_id, "command": request.get("command"), "args": request.get("args", [])})
-            if slot["event"].wait(REPLY_TIMEOUT):
-                reply = slot["reply"]
-            else:
-                reply = {"ok": False, "error": "no reply from the extension"}
-        finally:
-            with pending_lock:
-                pending.pop(req_id, None)
-        reply = dict(reply)
-        reply.pop("id", None)
-        conn.sendall((json.dumps(reply) + "\n").encode())
+        conn.sendall((json.dumps(relay(line)) + "\n").encode())
     except OSError:
         pass
     finally:
         conn.close()
+
+
+def handle_pipe_client(conn):
+    try:
+        if not conn.poll(10):
+            return
+        try:
+            raw = conn.recv_bytes(65536)
+        except (OSError, EOFError):
+            return
+        conn.send_bytes(json.dumps(relay(raw)).encode())
+    except (OSError, EOFError):
+        pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def serve_pipe():
+    from multiprocessing.connection import Listener
+
+    while True:
+        try:
+            listener = Listener(address=pipe_name(), family="AF_PIPE", authkey=load_key())
+        except Exception:
+            time.sleep(5)  # an old helper may still hold the pipe
+            continue
+        while True:
+            try:
+                conn = listener.accept()
+            except Exception:
+                continue  # failed key handshake: drop it and keep listening
+            threading.Thread(target=handle_pipe_client, args=(conn,), daemon=True).start()
 
 
 def serve(path):
@@ -111,8 +192,11 @@ def serve(path):
 
 
 def main():
-    path = socket_path()
-    threading.Thread(target=serve, args=(path,), daemon=True).start()
+    path = None if WINDOWS else socket_path()
+    if WINDOWS:
+        threading.Thread(target=serve_pipe, daemon=True).start()
+    else:
+        threading.Thread(target=serve, args=(path,), daemon=True).start()
     stdin = sys.stdin.buffer
     try:
         while True:
@@ -133,10 +217,11 @@ def main():
                 slot["reply"] = message
                 slot["event"].set()
     finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+        if path:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":
