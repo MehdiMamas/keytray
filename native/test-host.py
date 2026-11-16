@@ -120,6 +120,11 @@ try:
     cfg_case(b'{not json', None, "unparsable")
     cfg_case(b'[true]', None, "not an object")
     cfg_case(b'{"agentSignIn": true, "pad": "' + b"x" * 5000 + b'"}', None, "too big")
+    os.remove(cfgfile)
+    os.mkdir(cfgfile)  # a directory at the path
+    got = ask_config()
+    check(got == {"kind": "config", "config": None}, "getConfig directory: got %r" % (got,))
+    os.rmdir(cfgfile)
     check(run(["status"]).returncode == 0, "host stopped answering after config requests")
 
     if windows:

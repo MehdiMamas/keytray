@@ -90,7 +90,10 @@ def read_config():
     Returns None when the file is missing, too big, unparsable or not an object. Never raises.
     """
     try:
-        with open(os.path.join(config_dir(), "config.json"), "rb") as f:
+        path = os.path.join(config_dir(), "config.json")
+        if os.path.islink(path) or not os.path.isfile(path):
+            return None
+        with open(path, "rb") as f:
             data = f.read(CONFIG_MAX + 1)
         if len(data) > CONFIG_MAX:
             return None

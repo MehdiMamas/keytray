@@ -11,7 +11,10 @@ for arg in "$@"; do
   case "$arg" in
     --enable) [ "$CONFIG_MODE" = allow-all ] || CONFIG_MODE=enable ;;
     --allow-all) CONFIG_MODE=allow-all ;;
-    *) IDS+=("$arg") ;;
+    -*) echo "unknown option: $arg" >&2; exit 2 ;;
+    *)
+      if ! [[ "$arg" =~ ^[a-p]{32}$ ]]; then echo "not an extension id (32 letters a-p): $arg" >&2; exit 2; fi
+      IDS+=("$arg") ;;
   esac
 done
 
@@ -73,10 +76,11 @@ if [ -n "$CONFIG_MODE" ]; then
     Darwin) APPDIR="$HOME/Library/Application Support/Keytray" ;;
     *) APPDIR="${XDG_DATA_HOME:-$HOME/.local/share}/Keytray" ;;
   esac
-  mkdir -p "$APPDIR"
+  (umask 077; mkdir -p "$APPDIR")
+  chmod 700 "$APPDIR"
   if [ "$CONFIG_MODE" = allow-all ]; then ALL=true; else ALL=false; fi
   TMP="$APPDIR/config.json.$$.tmp"
-  printf '{"agentSignIn": true, "allowAll": %s}\n' "$ALL" > "$TMP"
+  (umask 077; printf '{"agentSignIn": true, "allowAll": %s}\n' "$ALL" > "$TMP")
   mv -f "$TMP" "$APPDIR/config.json"
   echo "wrote $APPDIR/config.json (agentSignIn on, allowAll $ALL)"
 fi

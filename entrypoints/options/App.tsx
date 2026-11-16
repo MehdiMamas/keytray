@@ -78,7 +78,13 @@ export function App() {
 
   const saveAllowlist = async (text: string) => {
     const list = normalizeAllowlist(text.split(/[\s,]+/));
-    await updateSettings({ agentAllowlist: list });
+    const hadAll = state?.settings.agentAllowlist.includes(ALL_SITES) ?? false;
+    const hasAll = list.includes(ALL_SITES);
+    await updateSettings({
+      agentAllowlist: list,
+      agentAllowAllFromFile: false,
+      agentAllowAllOffByUser: hasAll ? false : hadAll ? true : (state?.settings.agentAllowAllOffByUser ?? false),
+    });
     setAllowlistDirty(false);
     setAllowlistText(list.join('\n'));
   };

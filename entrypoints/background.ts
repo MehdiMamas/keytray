@@ -46,7 +46,12 @@ export default defineBackground(() => {
     void cachePaid(user.paid === true);
   });
   void ensureAlarm();
+  // The config-file probe runs only at browser start and install, never on a plain worker wake.
+  browser.runtime.onStartup.addListener(() => {
+    void probeIfAgentOff();
+  });
   browser.runtime.onInstalled.addListener(() => {
+    void probeIfAgentOff();
     void ensureAlarm();
   });
   browser.alarms.onAlarm.addListener((alarm) => {
@@ -69,7 +74,7 @@ export default defineBackground(() => {
       });
     return true;
   });
-  void startAgent();
+  void syncAgentConnection();
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.otpState) void syncAgentConnection();
   });
@@ -103,16 +108,12 @@ async function syncAgentConnection(): Promise<void> {
 }
 
 /**
- * At start, with Agent sign-in off and not switched off by the user, ask the
+ * At browser start or install, with Agent sign-in off and not switched off by the user, ask the
  * helper once for the config file. No retries: a missing helper just ends the probe.
  */
-async function startAgent(): Promise<void> {
+async function probeIfAgentOff(): Promise<void> {
   const { settings } = await loadState();
-  if (!settings.agentEnabled && !settings.agentOffByUser) {
-    connectAgent(true);
-    return;
-  }
-  await syncAgentConnection();
+  if (!settings.agentEnabled && !settings.agentOffByUser && !nativePort) connectAgent(true);
 }
 
 const PROBE_TIMEOUT_MS = 5000;
@@ -163,6 +164,8 @@ function connectAgent(probe = false): void {
     } catch {
       // Already closed.
     }
+    // The user may have switched it on while the probe ran.
+    void syncAgentConnection();
   };
   // Held as the connection from the start, so a storage change made by a
   // config reply does not open a second port.
@@ -309,7 +312,7 @@ function markAllNeedReauth(state: PersistedState): void {
 }
 
 /** Messages only the extension's own pages (options, popup) may send, never a content script. */
-const PAGE_ONLY_MESSAGES = new Set<string>(['SET_CUSTOM_OAUTH', 'CLEAR_CUSTOM_OAUTH']);
+const PAGE_ONLY_MESSAGES = new Set<string>(['SET_CUSTOM_OAUTH', 'CLEAR_CUSTOM_OAUTH', 'SET_SETTINGS']);
 
 /** Options opens in a tab, so sender.tab is set there; a content script's url is the web page's. */
 export function fromExtensionPage(sender: { id?: string; url?: string }): boolean {

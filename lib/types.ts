@@ -55,6 +55,10 @@ export interface Settings {
   agentConfigFromFile: boolean;
   /** The user switched Agent sign-in off in Options; the config file then cannot turn it on. */
   agentOffByUser: boolean;
+  /** The '*' in the allowlist was added by the config file (and only then may the file remove it). */
+  agentAllowAllFromFile: boolean;
+  /** The user removed '*' in Options; the config file does not add it again until the user does. */
+  agentAllowAllOffByUser: boolean;
 }
 
 export interface PersistedState {
@@ -99,6 +103,8 @@ export const DEFAULT_SETTINGS: Settings = {
   agentAllowlist: ['github.com', 'google.com', 'vercel.com', 'apple.com'],
   agentConfigFromFile: false,
   agentOffByUser: false,
+  agentAllowAllFromFile: false,
+  agentAllowAllOffByUser: false,
 };
 
 export const EMPTY_STATE: PersistedState = {

@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const store: Record<string, unknown> = {};
+const { store, hooks } = vi.hoisted(() => ({
+  store: {} as Record<string, unknown>,
+  hooks: {} as { installed?: () => void; startup?: () => void },
+}));
 type Port = {
   onMessage: { fn?: (m: unknown) => void; addListener: (f: (m: unknown) => void) => void };
   onDisconnect: { fn?: () => void; addListener: (f: () => void) => void };
@@ -21,7 +24,8 @@ vi.mock('wxt/browser', () => {
     browser: {
       alarms: { get: async () => ({ periodInMinutes: 1 }), create: async () => {}, onAlarm: event },
       runtime: {
-        onInstalled: event,
+        onInstalled: { addListener: (f: () => void) => (hooks.installed = f) },
+        onStartup: { addListener: (f: () => void) => (hooks.startup = f) },
         onMessage: event,
         connectNative: () => {
           const port: Port = {
@@ -71,6 +75,9 @@ describe('agent config file', () => {
   it('probes once at start, applies a config reply and keeps the port', async () => {
     background();
     await flush();
+    expect(ports).toHaveLength(0);
+    hooks.startup!();
+    await flush();
     expect(ports).toHaveLength(1);
     expect(ports[0].postMessage).toHaveBeenCalledWith({ kind: 'getConfig' });
     ports[0].onMessage.fn!({ kind: 'config', config: { agentSignIn: true, allowAll: true } });
@@ -80,10 +87,12 @@ describe('agent config file', () => {
     expect(settings().agentAllowlist).toContain('*');
     expect(runAgentCommand).not.toHaveBeenCalled();
     expect(ports[0].disconnect).not.toHaveBeenCalled();
+    ports[0].onDisconnect.fn!(); // leave no open port for the next test
   });
 
   it('drops the probe port when the file does not enable it', async () => {
     background();
+    hooks.startup!();
     await flush();
     ports[0].onMessage.fn!({ kind: 'config', config: null });
     await flush();
@@ -93,6 +102,7 @@ describe('agent config file', () => {
 
   it('does not reconnect when the probe port disconnects', async () => {
     background();
+    hooks.startup!();
     await flush();
     ports[0].onDisconnect.fn!();
     await vi.advanceTimersByTimeAsync(120_000);
@@ -102,7 +112,21 @@ describe('agent config file', () => {
   it('does not probe when the user switched the agent off', async () => {
     store.otpState = { settings: { agentOffByUser: true } };
     background();
+    hooks.startup!();
     await flush();
     expect(ports).toHaveLength(0);
+  });
+
+  it('a plain worker start does not open a native port while the agent is off', async () => {
+    background();
+    await flush();
+    expect(ports).toHaveLength(0);
+  });
+
+  it('connects at a plain worker start when the agent is on', async () => {
+    store.otpState = { settings: { agentEnabled: true } };
+    background();
+    await flush();
+    expect(ports).toHaveLength(1);
   });
 });

@@ -97,6 +97,8 @@ The computer's owner can turn on Agent sign-in without clicking in Options. The 
 - There is no site list on purpose: a list would bypass the sender-site check that `*` keeps. `allowAll: true` only adds `*` to the allowlist; `false` never removes anything.
 - The extension asks the helper with `{"kind": "getConfig"}` over the native port and gets `{"kind": "config", "config": {...} | null}`. This is the only way it is read; messages from web pages or other extensions never set it.
 - With Agent sign-in off, the extension asks once at start (5 s, no retries) when the user has not switched it off in Options. If the file says on, Agent sign-in turns on and Options shows "Set by this computer's Keytray config file."
+- Deleting the file, or setting `allowAll` to false, removes the `*` the file added, on the next browser start (a `*` the user added in Options stays). If the user removes `*` in Options, the file does not add it again until the user does.
+- `agentSignIn` false or missing never turns Agent sign-in off by itself; only the Options switch does.
 - The Options off switch always wins: once the user turns Agent sign-in off, the file cannot turn it on again until the user turns it on.
 - Any program running as the same user can write this file. That is the same trust level as the helper and its socket or pipe.
 - `native/install.sh --enable` or `--allow-all` (Windows: `-Enable`, `-AllowAll`) writes the file; without a flag the installers never create or change it. Uninstall keeps `config.json`.

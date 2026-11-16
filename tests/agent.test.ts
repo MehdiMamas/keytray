@@ -365,7 +365,21 @@ describe('siteOf and senderDomain', () => {
 });
 
 describe('applyFileConfig', () => {
-  const base = { agentEnabled: false, agentAllowlist: ['github.com'], agentConfigFromFile: false, agentOffByUser: false };
+  const base = {
+    agentEnabled: false,
+    agentAllowlist: ['github.com'],
+    agentConfigFromFile: false,
+    agentOffByUser: false,
+    agentAllowAllFromFile: false,
+    agentAllowAllOffByUser: false,
+  };
+  const ownStar = {
+    ...base,
+    agentEnabled: true,
+    agentConfigFromFile: true,
+    agentAllowAllFromFile: true,
+    agentAllowlist: ['github.com', '*'],
+  };
 
   it('changes nothing without a file or without agentSignIn', () => {
     expect(applyFileConfig(base, null)).toBeNull();
@@ -377,19 +391,51 @@ describe('applyFileConfig', () => {
     expect(applyFileConfig(base, { agentSignIn: true })).toEqual({ agentEnabled: true, agentConfigFromFile: true });
   });
 
-  it('adds * once when allowAll is true, never removes it', () => {
+  it('adds * once when allowAll is true and records that the file added it', () => {
     expect(applyFileConfig(base, { agentSignIn: true, allowAll: true })).toEqual({
       agentEnabled: true,
       agentConfigFromFile: true,
       agentAllowlist: ['github.com', '*'],
+      agentAllowAllFromFile: true,
     });
-    const on = { ...base, agentEnabled: true, agentConfigFromFile: true, agentAllowlist: ['github.com', '*'] };
-    expect(applyFileConfig(on, { agentSignIn: true, allowAll: true })).toBeNull();
-    expect(applyFileConfig(on, { agentSignIn: true, allowAll: false })).toBeNull();
+    expect(applyFileConfig(ownStar, { agentSignIn: true, allowAll: true })).toBeNull();
   });
 
-  it('lets the Options off switch win', () => {
+  it('does not claim a * the user added, and never removes it', () => {
+    const user = { ...base, agentEnabled: true, agentConfigFromFile: true, agentAllowlist: ['*'] };
+    expect(applyFileConfig(user, { agentSignIn: true, allowAll: true })).toBeNull();
+    expect(applyFileConfig(user, { agentSignIn: true, allowAll: false })).toBeNull();
+    expect(applyFileConfig(user, null)).toEqual({ agentConfigFromFile: false });
+  });
+
+  it('does not re-add * after the user removed it', () => {
+    const removed = { ...base, agentEnabled: true, agentConfigFromFile: true, agentAllowAllOffByUser: true };
+    expect(applyFileConfig(removed, { agentSignIn: true, allowAll: true })).toBeNull();
+  });
+
+  it('does not re-add * when the file flag is set but the user took it out', () => {
+    const gone = { ...ownStar, agentAllowlist: ['github.com'] };
+    expect(applyFileConfig(gone, { agentSignIn: true, allowAll: true })).toBeNull();
+  });
+
+  it('removes only the * the file added when allowAll goes false or the file goes away', () => {
+    const patch = { agentAllowAllFromFile: false, agentAllowlist: ['github.com'] };
+    expect(applyFileConfig(ownStar, { agentSignIn: true, allowAll: false })).toEqual(patch);
+    expect(applyFileConfig(ownStar, { agentSignIn: true })).toEqual(patch);
+    expect(applyFileConfig(ownStar, null)).toEqual({ ...patch, agentConfigFromFile: false });
+    expect(applyFileConfig(ownStar, { agentSignIn: false, allowAll: true })).toEqual({
+      ...patch,
+      agentConfigFromFile: false,
+    });
+  });
+
+  it('lets the Options off switch win over turning on, but still removes the file star', () => {
     expect(applyFileConfig({ ...base, agentOffByUser: true }, { agentSignIn: true, allowAll: true })).toBeNull();
+    expect(applyFileConfig({ ...ownStar, agentOffByUser: true }, null)).toEqual({
+      agentAllowAllFromFile: false,
+      agentAllowlist: ['github.com'],
+      agentConfigFromFile: false,
+    });
   });
 
   it('clears the from-file flag when the file goes away, leaving agentEnabled', () => {

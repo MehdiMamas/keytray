@@ -129,23 +129,48 @@ export interface AgentFileConfig {
 
 /**
  * Settings changes implied by the computer's config file, or null for no change.
- * The Options off switch (agentOffByUser) always wins. A missing file or a file
- * without agentSignIn:true only clears the from-file flag; it never switches
- * anything off and never removes a site.
+ * - The Options off switch (agentOffByUser) always wins over turning the agent on.
+ * - A missing file or agentSignIn not true never switches the agent off; it only
+ *   clears the from-file flag.
+ * - '*' is added only for allowAll:true, once, and never after the user removed
+ *   it (agentAllowAllOffByUser). The file removes only a '*' it added itself.
  */
 export function applyFileConfig(
-  settings: Pick<Settings, 'agentEnabled' | 'agentAllowlist' | 'agentConfigFromFile' | 'agentOffByUser'>,
+  settings: Pick<
+    Settings,
+    | 'agentEnabled'
+    | 'agentAllowlist'
+    | 'agentConfigFromFile'
+    | 'agentOffByUser'
+    | 'agentAllowAllFromFile'
+    | 'agentAllowAllOffByUser'
+  >,
   config: AgentFileConfig | null | undefined,
 ): Partial<Settings> | null {
-  if (!config || config.agentSignIn !== true) {
-    return settings.agentConfigFromFile ? { agentConfigFromFile: false } : null;
-  }
-  if (settings.agentOffByUser === true) return null;
   const patch: Partial<Settings> = {};
-  if (!settings.agentEnabled) patch.agentEnabled = true;
-  if (!settings.agentConfigFromFile) patch.agentConfigFromFile = true;
-  if (config.allowAll === true && !settings.agentAllowlist.includes(ALL_SITES)) {
-    patch.agentAllowlist = [...settings.agentAllowlist, ALL_SITES];
+  const fileOn = config?.agentSignIn === true;
+  const wantAll = fileOn && config?.allowAll === true;
+
+  if (settings.agentAllowAllFromFile && !wantAll) {
+    patch.agentAllowAllFromFile = false;
+    if (settings.agentAllowlist.includes(ALL_SITES)) {
+      patch.agentAllowlist = settings.agentAllowlist.filter((e) => e !== ALL_SITES);
+    }
+  }
+  if (!fileOn) {
+    if (settings.agentConfigFromFile) patch.agentConfigFromFile = false;
+  } else if (!settings.agentOffByUser) {
+    if (!settings.agentEnabled) patch.agentEnabled = true;
+    if (!settings.agentConfigFromFile) patch.agentConfigFromFile = true;
+    if (
+      wantAll &&
+      !settings.agentAllowAllFromFile &&
+      !settings.agentAllowAllOffByUser &&
+      !settings.agentAllowlist.includes(ALL_SITES)
+    ) {
+      patch.agentAllowlist = [...settings.agentAllowlist, ALL_SITES];
+      patch.agentAllowAllFromFile = true;
+    }
   }
   return Object.keys(patch).length ? patch : null;
 }
