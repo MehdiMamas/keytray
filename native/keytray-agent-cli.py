@@ -5,13 +5,20 @@
   keytray-agent-cli.py pending <tabId>
   keytray-agent-cli.py fill_code <tabId> [--wait SECONDS]
   keytray-agent-cli.py open_link <tabId>
+
+On Windows it talks to the helper over a named pipe; from WSL it re-runs itself
+through the Windows install (%LOCALAPPDATA%\\Keytray\\keytray.cmd).
 """
+import getpass
 import json
 import os
 import socket
+import subprocess
 import sys
 
 TIMEOUT = 140
+WINDOWS = os.name == "nt"
+NOT_RUNNING = "Keytray host is not running. Install it with native/install.sh (Windows: native\\windows\\install.ps1) and enable Agent sign-in in Options."
 
 
 def socket_path():
@@ -25,9 +32,51 @@ def socket_path():
     return os.path.join(base, "agent.sock")
 
 
+def appdir():
+    override = os.environ.get("KEYTRAY_APPDIR")
+    if override:
+        return override
+    return os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "Keytray")
+
+
+def pipe_name():
+    override = os.environ.get("KEYTRAY_AGENT_PIPE")
+    if override:
+        return override
+    return "\\\\.\\pipe\\keytray-agent-" + getpass.getuser()
+
+
 def fail(message, code=2):
     print(json.dumps({"ok": False, "error": message}))
     sys.exit(code)
+
+
+def under_wsl():
+    # the pipe and agent.key exist only on the Windows side, so a WSL shell hands the call to Windows.
+    # KEYTRAY_NO_WSL_REEXEC=1 turns it off
+    if os.environ.get("KEYTRAY_NO_WSL_REEXEC"):
+        return False
+    try:
+        with open("/proc/sys/kernel/osrelease") as f:
+            return "microsoft" in f.read().lower()
+    except OSError:
+        return False
+
+
+def wsl_reexec(argv):
+    missing = "Keytray helper is not installed on Windows: run native\\windows\\install.ps1"
+    try:
+        local = subprocess.run(["cmd.exe", "/c", "echo %LOCALAPPDATA%"], capture_output=True, text=True,
+                               cwd="/mnt/c", check=True).stdout.strip().replace("\r", "")
+        if not local or "%" in local:
+            fail(missing)
+        target = local + "\\Keytray\\keytray.cmd"
+        unix = subprocess.run(["wslpath", "-u", target], capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        fail(missing)
+    if not os.path.exists(unix):
+        fail(missing)
+    sys.exit(subprocess.call(["cmd.exe", "/c", target] + argv, cwd="/mnt/c"))
 
 
 def parse(argv):
@@ -56,13 +105,12 @@ def parse(argv):
     return command, args
 
 
-def main():
-    command, args = parse(sys.argv[1:])
+def ask_unix(request):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.settimeout(TIMEOUT)
     try:
         sock.connect(socket_path())
-        sock.sendall((json.dumps({"command": command, "args": args}) + "\n").encode())
+        sock.sendall((json.dumps(request) + "\n").encode())
         buf = b""
         while b"\n" not in buf:
             chunk = sock.recv(65536)
@@ -70,10 +118,48 @@ def main():
                 break
             buf += chunk
     except FileNotFoundError:
-        fail("Keytray host is not running. Install it with native/install.sh and enable Agent sign-in in Options.")
+        fail(NOT_RUNNING)
     except (OSError, socket.timeout) as error:
         fail("could not reach Keytray: %s" % error)
-    line = buf.split(b"\n", 1)[0].decode("utf-8")
+    return buf.split(b"\n", 1)[0]
+
+
+def ask_pipe(request):
+    # send_bytes/recv_bytes only, never send()/recv() (pickle)
+    from multiprocessing import AuthenticationError
+    from multiprocessing.connection import Client
+
+    try:
+        with open(os.path.join(appdir(), "agent.key"), "rb") as f:
+            key = f.read()
+    except OSError:
+        fail(NOT_RUNNING)
+    if len(key) != 32:
+        fail(NOT_RUNNING)
+    try:
+        conn = Client(pipe_name(), family="AF_PIPE", authkey=key)
+    except AuthenticationError:
+        fail("could not reach Keytray: key mismatch, rerun install.ps1")
+    except (FileNotFoundError, OSError):
+        fail(NOT_RUNNING)
+    with conn:
+        try:
+            conn.send_bytes(json.dumps(request).encode())
+            if not conn.poll(TIMEOUT):
+                fail("could not reach Keytray: timed out")
+            return conn.recv_bytes()
+        except (EOFError, OSError):
+            return b""
+
+
+def main():
+    argv = sys.argv[1:]
+    if not WINDOWS and under_wsl():
+        wsl_reexec(argv)
+    command, args = parse(argv)
+    request = {"command": command, "args": args}
+    raw = ask_pipe(request) if WINDOWS else ask_unix(request)
+    line = raw.decode("utf-8").strip()
     if not line:
         fail("empty reply from Keytray")
     try:

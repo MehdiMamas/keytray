@@ -33,6 +33,7 @@ A program on your computer (for example an AI agent driving Chrome) can ask Keyt
 Set up:
 
 1. Run `native/install.sh`. It registers a small helper (`com.keytray.agent`) with Chrome, Edge and Brave. Python 3 is required.
+   On Windows run `powershell -ExecutionPolicy Bypass -File native\windows\install.ps1` instead (Chrome and Edge). The CLI is then `%LOCALAPPDATA%\Keytray\keytray.cmd`. In WSL, the repo's `native/keytray-agent-cli.py` works after the Windows install: it hands the call to the Windows helper.
 2. Open Keytray Options, go to "Agent sign-in" and turn it on. Chrome asks for the native messaging permission.
 3. Use the CLI:
 
@@ -48,8 +49,10 @@ native/keytray-agent-cli.py open_link <tabId>
 Safety rules:
 
 - Only sites on the allowlist work (default github.com, google.com, vercel.com, apple.com; exact host or subdomain). Edit it in Options. Every frame that receives a code must match too, and a link is only opened if its own host is allowed.
+- Allowed sites can be `*` (Options: Allow all sites): every https site; the code still goes only to frames on the tab's own site or a listed site, a link opens only on the tab's site or a listed site, and the rate limit stays.
 - Fill never submits the form. The agent clicks the button itself.
 - A code is filled once, then marked used.
 - At most 10 requests per 10 minutes. The last 200 requests are listed in Options with time, command, site and result. They never contain codes or links.
 - Replies strip any field named code, otp, link, url, token, secret or password.
+- On Windows the helper listens on the named pipe `\\.\pipe\keytray-agent-<user>`; a client needs the key in `%LOCALAPPDATA%\Keytray\agent.key`.
 - The helper listens on `~/Library/Application Support/Keytray/agent.sock` (Linux: `~/.local/share/Keytray/agent.sock`), readable only by your user. Anything running as you can reach it, which is why the allowlist and the off switch exist.

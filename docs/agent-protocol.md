@@ -9,6 +9,15 @@ How a local program talks to Keytray's agent bridge (`native/keytray-agent.py`).
 - Override: `KEYTRAY_AGENT_SOCK` (read by both the host and the CLI).
 - Unix stream socket, mode 0600, directory 0700. The host is started by the extension (`connectNative`) only while Agent sign-in is on in Options. The host removes the socket when it exits. So "off" usually shows up as a missing socket, not as a reply.
 
+## Windows
+
+- Named pipe `\\.\pipe\keytray-agent-<user name>`. Override: `KEYTRAY_AGENT_PIPE`.
+- Key file: `%LOCALAPPDATA%\Keytray\agent.key` (override the folder with `KEYTRAY_APPDIR`). The host makes it with 32 random bytes on first start; a file of any other size counts as missing and is replaced.
+- The handshake is `multiprocessing.connection` with `family="AF_PIPE"` and the key as `authkey`: `Listener(address, family="AF_PIPE", authkey=key)` on the host, `Client(address, family="AF_PIPE", authkey=key)` in the client. A client without the key fails the handshake and gets no reply.
+- One request per connection. Use `send_bytes` and `recv_bytes` only, never `send` or `recv` (they use pickle). The request is the same JSON object as below, as bytes, 65,536 bytes max. The host waits 10 s for it (`poll(10)`); the client should `poll(140)` before `recv_bytes`.
+- Known limit: a local process that connects and never answers the handshake can stall `accept()` until it gives up. It needs no key. It is the same class of problem as a local process filling the Unix socket backlog.
+- WSL: `native/keytray-agent-cli.py` run inside WSL re-runs itself through the installed `%LOCALAPPDATA%\Keytray\keytray.cmd` (via `cmd.exe`), so the host and client use the same Windows Python. Set `KEYTRAY_NO_WSL_REEXEC=1` to turn that off.
+
 ## Framing
 
 One request per connection. The client sends one line of UTF-8 JSON ending in `\n` (65,536 bytes max; the host stops reading after 10 s). The host writes one line of JSON ending in `\n` and closes the connection. The host waits up to 130 s for the extension's reply, so clients should time out after at least 140 s (the CLI uses 140 s).

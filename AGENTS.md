@@ -6,7 +6,7 @@ Keytray: a Chrome, Edge and Brave extension (WXT, React, TypeScript) that reads 
 ## Setup
 - Needs pnpm (version pinned in `package.json`). `pnpm install --frozen-lockfile`, then `pnpm exec wxt prepare`.
 - Copy `.env.example` to `.env` and set `WXT_GOOGLE_CLIENT_ID` and `WXT_GOOGLE_CLIENT_SECRET` (Google Cloud OAuth client; steps in `SETUP.md`). Never commit `.env`.
-- Native helper (agent sign-in): `native/install.sh` (needs Python 3).
+- Native helper (agent sign-in): `native/install.sh` on macOS/Linux, `native\windows\install.ps1` on Windows (needs Python 3; WSL uses the Windows install through the CLI). `python native/test-host.py` tests it.
 
 ## Commands
 - `pnpm dev` (WXT dev), `pnpm build`, `pnpm zip` (store build), `pnpm zip:sideload`.
