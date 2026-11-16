@@ -14,6 +14,7 @@ vi.mock('wxt/browser', () => {
       alarms: { get: async () => ({ periodInMinutes: 1 }), create: async () => {}, onAlarm: event },
       runtime: {
         onInstalled: event,
+        onStartup: event,
         onMessage: {
           addListener: (fn: typeof listener) => {
             listener = fn;

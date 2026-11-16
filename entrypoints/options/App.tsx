@@ -73,12 +73,19 @@ export function App() {
 
   const toggleAgent = async (on: boolean) => {
     setError('');
-    await updateSettings({ agentEnabled: on });
+    await updateSettings({ agentEnabled: on, agentOffByUser: !on, agentConfigFromFile: false });
   };
 
   const saveAllowlist = async (text: string) => {
     const list = normalizeAllowlist(text.split(/[\s,]+/));
-    await updateSettings({ agentAllowlist: list });
+    const hadAll = state?.settings.agentAllowlist.includes(ALL_SITES) ?? false;
+    const hasAll = list.includes(ALL_SITES);
+    await updateSettings({
+      agentAllowlist: list,
+      // Keep the from-file flag while the file's own * stays; clear it when the user removes or adds *.
+      agentAllowAllFromFile: hadAll && hasAll ? (state?.settings.agentAllowAllFromFile ?? false) : false,
+      agentAllowAllOffByUser: hasAll ? false : hadAll ? true : (state?.settings.agentAllowAllOffByUser ?? false),
+    });
     setAllowlistDirty(false);
     setAllowlistText(list.join('\n'));
   };
@@ -274,6 +281,9 @@ export function App() {
           checked={state.settings.agentEnabled}
           onChange={(on) => void toggleAgent(on)}
         />
+        {state.settings.agentConfigFromFile && (
+          <p className="text-xs text-ink/60">Set by this computer's Keytray config file.</p>
+        )}
         <label className="block text-sm">
           Allowed sites (one per line, subdomains included)
           <textarea

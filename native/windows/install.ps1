@@ -1,8 +1,12 @@
 # Registers the Keytray native messaging host with Chrome and Edge on Windows.
-#   powershell -ExecutionPolicy Bypass -File native\windows\install.ps1 [extra-extension-id ...]
+#   powershell -ExecutionPolicy Bypass -File native\windows\install.ps1 [-Enable | -AllowAll] [extra-extension-id ...]
+#   -Enable    also write config.json with agentSignIn on (no site list)
+#   -AllowAll  like -Enable, and allow all https sites
 #   powershell -ExecutionPolicy Bypass -File native\windows\install.ps1 -Uninstall
 param(
   [switch]$Uninstall,
+  [switch]$Enable,
+  [switch]$AllowAll,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$ExtraIds
 )
@@ -31,8 +35,12 @@ if ($Uninstall) {
     $path = Join-Path $Dest $file
     if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
   }
-  Write-Output "Keytray agent helper removed. agent.key is kept in $Dest."
+  Write-Output "Keytray agent helper removed. agent.key and config.json are kept in $Dest."
   exit 0
+}
+
+foreach ($id in @($ExtraIds | Where-Object { $_ })) {
+  if ($id -cnotmatch "^[a-p]{32}$") { throw "Not an extension id (32 letters a-p): $id" }
 }
 
 # a real Python 3.8+; the WindowsApps python.exe is the Microsoft Store stub
@@ -97,8 +105,17 @@ foreach ($root in $Roots) {
   Set-Item -LiteralPath $key -Value $Manifest
 }
 
+if ($Enable -or $AllowAll) {
+  $all = if ($AllowAll) { "true" } else { "false" }
+  $cfgTmp = Join-Path $Dest ("config.json." + [guid]::NewGuid().ToString("N") + ".tmp")
+  [System.IO.File]::WriteAllText($cfgTmp, "{`"agentSignIn`": true, `"allowAll`": $all}`n", $Utf8)
+  Move-Item -Force -LiteralPath $cfgTmp -Destination (Join-Path $Dest "config.json")
+  Write-Output "Wrote $(Join-Path $Dest 'config.json') (agentSignIn on, allowAll $all)"
+}
+
 Write-Output "Store extension id: $StoreId"
 Write-Output "Dev (key) extension id: $devId"
 Write-Output "Host: $hostCmd"
 Write-Output "CLI: $cliCmd"
-Write-Output "Reload Keytray, then turn on Agent sign-in in Options."
+if (-not ($Enable -or $AllowAll)) { Write-Output "Reload Keytray, then turn on Agent sign-in in Options." }
+else { Write-Output "Reload Keytray; Agent sign-in turns on by itself." }

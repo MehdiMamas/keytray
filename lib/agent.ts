@@ -5,7 +5,7 @@
  * is unit-testable.
  */
 import { getDomain } from 'tldts';
-import { CODE_MAX_AGE_MS, type CodeEntry } from './types';
+import { CODE_MAX_AGE_MS, type CodeEntry, type Settings } from './types';
 
 export const DEFAULT_AGENT_ALLOWLIST = ['github.com', 'google.com', 'vercel.com', 'apple.com'];
 /** Allowlist entry meaning every https site. */
@@ -119,6 +119,61 @@ export function urlSite(url: string): string {
   } catch {
     return '';
   }
+}
+
+/** What the helper reads from the per-machine config.json. Never a site list. */
+export interface AgentFileConfig {
+  agentSignIn?: boolean;
+  allowAll?: boolean;
+}
+
+/**
+ * Settings changes implied by the computer's config file, or null for no change.
+ * - The Options off switch (agentOffByUser) always wins over turning the agent on.
+ * - A missing file or agentSignIn not true never switches the agent off; it only
+ *   clears the from-file flag.
+ * - '*' is added only for allowAll:true, once, and never after the user removed
+ *   it (agentAllowAllOffByUser). The file removes only a '*' it added itself.
+ */
+export function applyFileConfig(
+  settings: Pick<
+    Settings,
+    | 'agentEnabled'
+    | 'agentAllowlist'
+    | 'agentConfigFromFile'
+    | 'agentOffByUser'
+    | 'agentAllowAllFromFile'
+    | 'agentAllowAllOffByUser'
+  >,
+  config: AgentFileConfig | null | undefined,
+): Partial<Settings> | null {
+  const patch: Partial<Settings> = {};
+  const fileOn = config?.agentSignIn === true;
+  const wantAll = fileOn && config?.allowAll === true;
+
+  if (settings.agentAllowAllFromFile && !wantAll) {
+    patch.agentAllowAllFromFile = false;
+    if (settings.agentAllowlist.includes(ALL_SITES)) {
+      patch.agentAllowlist = settings.agentAllowlist.filter((e) => e !== ALL_SITES);
+    }
+  }
+  if (!fileOn) {
+    if (settings.agentConfigFromFile) patch.agentConfigFromFile = false;
+  } else if (!settings.agentOffByUser) {
+    if (!settings.agentEnabled) patch.agentEnabled = true;
+    // Claim it only when the file itself turned the agent on.
+    if (!settings.agentEnabled && !settings.agentConfigFromFile) patch.agentConfigFromFile = true;
+    if (
+      wantAll &&
+      !settings.agentAllowAllFromFile &&
+      !settings.agentAllowAllOffByUser &&
+      !settings.agentAllowlist.includes(ALL_SITES)
+    ) {
+      patch.agentAllowlist = [...settings.agentAllowlist, ALL_SITES];
+      patch.agentAllowAllFromFile = true;
+    }
+  }
+  return Object.keys(patch).length ? patch : null;
 }
 
 export class RateLimiter {

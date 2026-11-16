@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 # Registers the Keytray native messaging host with Chrome, Edge and Brave.
-# Usage: native/install.sh [extra-extension-id ...]
+# Usage: native/install.sh [--enable | --allow-all] [extra-extension-id ...]
+#   --enable     also write config.json with agentSignIn on (no site list)
+#   --allow-all  like --enable, and allow all https sites
 set -euo pipefail
+
+CONFIG_MODE=""
+IDS=()
+for arg in "$@"; do
+  case "$arg" in
+    --enable) [ "$CONFIG_MODE" = allow-all ] || CONFIG_MODE=enable ;;
+    --allow-all) CONFIG_MODE=allow-all ;;
+    -*) echo "unknown option: $arg" >&2; exit 2 ;;
+    *)
+      if ! [[ "$arg" =~ ^[a-p]{32}$ ]]; then echo "not an extension id (32 letters a-p): $arg" >&2; exit 2; fi
+      IDS+=("$arg") ;;
+  esac
+done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_PATH="$HERE/keytray-agent.py"
@@ -21,7 +36,7 @@ PY
 )"
 
 ORIGINS=""
-for id in "$STORE_ID" "$DEV_ID" "$@"; do
+for id in "$STORE_ID" "$DEV_ID" ${IDS[@]+"${IDS[@]}"}; do
   case "$ORIGINS" in *"chrome-extension://$id/"*) continue ;; esac
   ORIGINS="$ORIGINS\"chrome-extension://$id/\", "
 done
@@ -56,7 +71,21 @@ for dir in "${DIRS[@]}"; do
   echo "wrote $dir/com.keytray.agent.json"
 done
 
+if [ -n "$CONFIG_MODE" ]; then
+  case "$(uname -s)" in
+    Darwin) APPDIR="$HOME/Library/Application Support/Keytray" ;;
+    *) APPDIR="${XDG_DATA_HOME:-$HOME/.local/share}/Keytray" ;;
+  esac
+  (umask 077; mkdir -p "$APPDIR")
+  chmod 700 "$APPDIR"
+  if [ "$CONFIG_MODE" = allow-all ]; then ALL=true; else ALL=false; fi
+  TMP="$APPDIR/config.json.$$.tmp"
+  (umask 077; printf '{"agentSignIn": true, "allowAll": %s}\n' "$ALL" > "$TMP")
+  mv -f "$TMP" "$APPDIR/config.json"
+  echo "wrote $APPDIR/config.json (agentSignIn on, allowAll $ALL)"
+fi
+
 echo "Store extension id: $STORE_ID"
 echo "Dev (key) extension id: $DEV_ID"
 echo "Host: $HOST_PATH"
-echo "Next: open Keytray Options and turn on Agent sign-in."
+if [ -z "$CONFIG_MODE" ]; then echo "Next: open Keytray Options and turn on Agent sign-in."; fi

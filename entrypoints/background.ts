@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import type { ExtensionRequest, ExtensionResponse, FillResponse, HasFieldResponse } from '~/lib/messages';
-import { RateLimiter, runAgentCommand, type AgentDeps, type AgentRequest } from '~/lib/agent';
+import { RateLimiter, applyFileConfig, runAgentCommand, type AgentFileConfig, type AgentDeps, type AgentRequest } from '~/lib/agent';
 import { AuthError, HistoryExpiredError, gmailMessageUrl, pollGmail } from '~/lib/gmail';
 import { extractCode } from '~/lib/extract';
 import { notificationClickAction } from '~/lib/entry-display';
@@ -46,7 +46,12 @@ export default defineBackground(() => {
     void cachePaid(user.paid === true);
   });
   void ensureAlarm();
+  // The config-file probe runs only at browser start and install, never on a plain worker wake.
+  browser.runtime.onStartup.addListener(() => {
+    void probeIfAgentOff();
+  });
   browser.runtime.onInstalled.addListener(() => {
+    void probeIfAgentOff();
     void ensureAlarm();
   });
   browser.alarms.onAlarm.addListener((alarm) => {
@@ -102,17 +107,84 @@ async function syncAgentConnection(): Promise<void> {
   if (!nativePort) connectAgent();
 }
 
-function connectAgent(): void {
+/**
+ * At browser start or install, with Agent sign-in off and not switched off by the user, ask the
+ * helper once for the config file. No retries: a missing helper just ends the probe.
+ */
+async function probeIfAgentOff(): Promise<void> {
+  const { settings } = await loadState();
+  if (!settings.agentEnabled && !settings.agentOffByUser && !nativePort) connectAgent(true);
+}
+
+const PROBE_TIMEOUT_MS = 5000;
+
+/** Applies a config reply. Returns true when Agent sign-in is on afterwards. */
+function applyConfigMessage(config: AgentFileConfig | null): Promise<boolean> {
+  return enqueue(async () => {
+    const state = await loadState();
+    const patch = applyFileConfig(state.settings, config);
+    if (patch) {
+      state.settings = { ...state.settings, ...patch };
+      await saveState(state);
+      await publish(state);
+    }
+    return state.settings.agentEnabled;
+  });
+}
+
+function parseConfig(value: unknown): AgentFileConfig | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const config: AgentFileConfig = {};
+  if (typeof raw.agentSignIn === 'boolean') config.agentSignIn = raw.agentSignIn;
+  if (typeof raw.allowAll === 'boolean') config.allowAll = raw.allowAll;
+  return config;
+}
+
+function connectAgent(probe = false): void {
   let port: ReturnType<typeof browser.runtime.connectNative>;
   try {
     port = browser.runtime.connectNative(NATIVE_HOST);
   } catch (error) {
     console.error('[Keytray] agent host unavailable', error);
-    scheduleReconnect();
+    if (!probe) scheduleReconnect();
     return;
   }
+  let probing = probe;
+  let probeTimer: ReturnType<typeof setTimeout> | undefined;
+  const endProbe = (): void => {
+    clearTimeout(probeTimer);
+    probing = false;
+  };
+  const dropProbe = (): void => {
+    endProbe();
+    if (nativePort === port) nativePort = null;
+    try {
+      port.disconnect();
+    } catch {
+      // Already closed.
+    }
+    // The user may have switched it on while the probe ran.
+    void syncAgentConnection();
+  };
+  // Held as the connection from the start, so a storage change made by a
+  // config reply does not open a second port.
   nativePort = port;
   port.onMessage.addListener((message: unknown) => {
+    if (message && typeof message === 'object' && (message as { kind?: unknown }).kind === 'config') {
+      // Config comes only from the native port and never reaches runAgentCommand.
+      const wasProbe = probing;
+      void applyConfigMessage(parseConfig((message as { config?: unknown }).config))
+        .then((enabled) => {
+          if (!wasProbe) return;
+          if (enabled) endProbe();
+          else dropProbe();
+        })
+        .catch(() => {
+          if (wasProbe) dropProbe();
+        });
+      return;
+    }
     const request = message as AgentRequest;
     void runAgentCommand(request, agentDeps())
       .catch((error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : 'failed' }))
@@ -125,10 +197,19 @@ function connectAgent(): void {
       });
   });
   port.onDisconnect.addListener(() => {
+    void browser.runtime.lastError; // read it so Chrome logs nothing
+    const wasProbing = probing;
+    endProbe();
     if (nativePort === port) nativePort = null;
-    scheduleReconnect();
+    if (!wasProbing) scheduleReconnect();
   });
-  reconnectDelay = 1000;
+  try {
+    port.postMessage({ kind: 'getConfig' });
+  } catch {
+    // Port already closed; onDisconnect handles it.
+  }
+  if (probe) probeTimer = setTimeout(dropProbe, PROBE_TIMEOUT_MS);
+  else reconnectDelay = 1000;
 }
 
 function scheduleReconnect(): void {
@@ -231,7 +312,7 @@ function markAllNeedReauth(state: PersistedState): void {
 }
 
 /** Messages only the extension's own pages (options, popup) may send, never a content script. */
-const PAGE_ONLY_MESSAGES = new Set<string>(['SET_CUSTOM_OAUTH', 'CLEAR_CUSTOM_OAUTH']);
+const PAGE_ONLY_MESSAGES = new Set<string>(['SET_CUSTOM_OAUTH', 'CLEAR_CUSTOM_OAUTH', 'SET_SETTINGS']);
 
 /** Options opens in a tab, so sender.tab is set there; a content script's url is the web page's. */
 export function fromExtensionPage(sender: { id?: string; url?: string }): boolean {
