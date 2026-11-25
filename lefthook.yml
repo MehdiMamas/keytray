@@ -1,7 +1,7 @@
 # Runs before every push. Install once per clone: pnpm exec lefthook install
 # Needs `pnpm exec wxt prepare` to have run once (it writes .wxt/tsconfig.json).
 pre-push:
-  parallel: false
+  parallel: true
   commands:
     typecheck:
       run: pnpm compile
