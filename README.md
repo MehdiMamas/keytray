@@ -18,7 +18,7 @@ You can remove the purchase code and build a copy for yourself. Selling it, char
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Run `pnpm exec lefthook install` once per clone to get the pre-push check.
 
 ## Links
 
