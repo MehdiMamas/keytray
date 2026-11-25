@@ -13,6 +13,7 @@ You need Node.js and [pnpm](https://pnpm.io) (the version is pinned in `package.
 ```bash
 pnpm install
 pnpm exec wxt prepare
+pnpm exec lefthook install   # once per clone: pre-push runs pnpm compile and pnpm test (about 40 seconds)
 cp .env.example .env   # add your own Google OAuth client id and secret, see SETUP.md
 ```
 
