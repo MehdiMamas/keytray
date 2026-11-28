@@ -18,8 +18,8 @@ importers:
         specifier: ^19.1.0
         version: 19.3.0(react@19.3.0)
       tldts:
-        specifier: ^7.5.4
-        version: 7.5.4
+        specifier: ^7.6.0
+        version: 7.6.0
     devDependencies:
       '@types/react':
         specifier: ^19.1.0
@@ -2137,11 +2137,11 @@ packages:
     resolution: {integrity: sha512-u8KszXvGfU68hVcZpRHKG28T0krMuv2G5nDhiHaMLen/gIuFEgIJhaJuO69qjnXg5paSrbPMFfx3brNuN8eVSg==}
     engines: {node: '>=14.0.0'}
 
-  tldts-core@7.5.4:
-    resolution: {integrity: sha512-9+4zWtKEDZ3V3FoZ1B97rv+5z5oqp7yeXGVze3CxgQ+CJro9do9DCPD00wxstYZDXDMXsurkBerFfiB6GYtPbA==}
+  tldts-core@7.6.0:
+    resolution: {integrity: sha512-0By9U6fw2hNzfJAbBMuo1bsX/OyVlsj0wjGyMPV50RZKoLCRwXBOX0FQqgZDaMo2WjjaEW/ZGyVXicLUFTmXqQ==}
 
-  tldts@7.5.4:
-    resolution: {integrity: sha512-Rn2ABgjHZrA+jzqom5zhxA0hLohzYrIgfCPyhpTUxqsUrcsBYuab49LseR9waB9Jr8/MxdodvMHA91oRiGLO3Q==}
+  tldts@7.6.0:
+    resolution: {integrity: sha512-IFk9SJW/EhTZMpJA1zRdP+69JK4NmJbMx1aRdJvLBR9em1k62eWiwolSWlDRpRdkaAnZ1dDCwFPmRPBNuLGGHA==}
     hasBin: true
 
   tmp@0.2.5:
@@ -4305,11 +4305,11 @@ snapshots:
 
   tinyspy@4.0.6: {}
 
-  tldts-core@7.5.4: {}
+  tldts-core@7.6.0: {}
 
-  tldts@7.5.4:
+  tldts@7.6.0:
     dependencies:
-      tldts-core: 7.5.4
+      tldts-core: 7.6.0
 
   tmp@0.2.5: {}
 
