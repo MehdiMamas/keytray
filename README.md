@@ -2,6 +2,8 @@ Chrome, Edge and Brave extension that reads verification codes and sign-in links
 
 <img src="public/icons/icon128.png" alt="Keytray icon" width="64" height="64">
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MehdiMamas/keytray/badge)](https://scorecard.dev/viewer/?uri=github.com/MehdiMamas/keytray)
+
 ![Keytray showing recent codes, then filling one into a verification page](docs/images/demo.gif)
 
 One account is free. A one-time purchase unlocks more. For each new code it can auto-fill the page, copy the code, or only keep it in the popup. A verification link can be opened from the popup. Mail is read in the browser with the Gmail readonly scope. Checkout for extra accounts is ExtensionPay and Stripe.
