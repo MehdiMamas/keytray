@@ -1,0 +1,8 @@
+overrides:
+  node-forge: ^1.4.4
+  shell-quote: ^1.9.0
+  tmp: ^0.2.6
+  uuid: ^11.1.1
+  adm-zip: ^0.6.1
+  source-map-js: ^1.2.2
+  postcss-selector-parser: ^6.1.5
