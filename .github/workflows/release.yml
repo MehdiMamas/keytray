@@ -132,7 +132,7 @@ jobs:
             echo "::warning::The variables GCP_WIF_PROVIDER, CWS_SERVICE_ACCOUNT and CWS_PUBLISHER_ID are not all set; skipping Chrome Web Store upload."
           fi
       - if: steps.gate.outputs.enabled == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-zips
           path: dist-release
